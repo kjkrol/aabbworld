@@ -157,8 +157,12 @@ func TestTick_NamesABoxItPushedOutOfAnOpenEdge(t *testing.T) {
 	e := w.space.CollideEngine(h, collide.Config{Reach: 0.5, Iterations: 4})
 	e.Tick()
 
-	if got := e.Left(); !slices.Equal(got, []uid.UID64{pushed}) {
-		t.Errorf("Left = %v after the wall pushed %v past the open edge, want exactly it", got, pushed)
+	got := e.Left()
+	if len(got) != 1 || got[0].ID != pushed {
+		t.Fatalf("Left = %v after the wall pushed %v past the open edge, want exactly it", got, pushed)
+	}
+	if box := got[0].Box; box.BottomRight.X > 0 || box.Penetration(plane.NewAABB(geom.NewVec(0, 100), 10, 10).AABB) != (geom.Vec{}) {
+		t.Errorf("Left names it at %v, want it wholly past the edge, clear of the wall", box.AABB)
 	}
 	if len(moved) != 0 {
 		t.Errorf("onMoved heard %v, want nothing: the wall stood and the other box left", moved)

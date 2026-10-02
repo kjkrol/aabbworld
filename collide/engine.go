@@ -32,6 +32,14 @@ type Engine interface {
 	// Tick separates every overlapping pair the Space holds now and reports as it goes; the
 	// Space answers its next Query with the pushed boxes without another Rebuild.
 	Tick()
-	// Left is who the last Tick pushed out through an open edge; good until the next Tick.
-	Left() []uid.UID64
+	// Left is who the last Tick pushed out through an open edge, and where to; good until the
+	// next Tick.
+	Left() []Leaver
+}
+
+// Leaver is a box an Engine pushed out through an open edge, where it came to rest — wholly past
+// the edge. It is not Moved: whoever owns the box writes it back from here.
+type Leaver struct {
+	ID  uid.UID64
+	Box plane.AABB
 }

@@ -5,8 +5,9 @@
 //
 // An [Engine] is built by [New] over a Grid and its Surface, reporting to a [Handler]. Each
 // [Engine.Tick] takes the grid's items as they are, asks the grid for every pair within reach, hands
-// the pairs to a [Solver], and afterwards reports each pushed item once — as Moved, or as Left when
-// the push took it wholly out through an open edge. It then tells the grid its cells are behind, so
+// the pairs to a [Solver], and afterwards reports each pushed item once — as Moved, or as Left, with
+// the box it came to rest at, when the push took it wholly out through an open edge. It then tells
+// the grid its cells are behind, so
 // the next Query sees the pushed boxes.
 //
 // # Solver

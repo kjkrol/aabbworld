@@ -26,7 +26,7 @@ type Engine struct {
 
 	solver Solver
 	items  []spatial.Item
-	left   []uid.UID64
+	left   []pcollide.Leaver
 	moved  []uint32
 	stamp  uint32
 
@@ -72,8 +72,9 @@ func (e *Engine) Tick() {
 	e.grid.Invalidate()
 }
 
-// Left is who the last Tick pushed out through an open edge; good until the next Tick.
-func (e *Engine) Left() []uid.UID64 { return e.left }
+// Left is who the last Tick pushed out through an open edge, and where to; good until the next
+// Tick.
+func (e *Engine) Left() []pcollide.Leaver { return e.left }
 
 // add takes a pair the grid found, lower entity id first, as the handler has always heard them.
 func (e *Engine) add(a, b int32) {
@@ -100,7 +101,7 @@ func (e *Engine) pushed(item int32) {
 	e.moved[item] = e.stamp
 	it := &e.items[item]
 	if e.surface.Left(&it.Box) {
-		e.left = append(e.left, it.ID)
+		e.left = append(e.left, pcollide.Leaver{ID: it.ID, Box: it.Box})
 		return
 	}
 	e.handler.Moved(it.ID, it.Box)

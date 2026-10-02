@@ -260,8 +260,12 @@ func TestTick_WhoIsPushedOutOfAnOpenEdgeIsLeftNotMoved(t *testing.T) {
 
 	s.tick(nil, nil)
 
-	if got := s.engine.Left(); !slices.Equal(got, []uid.UID64{1}) {
-		t.Errorf("Left = %v, want the box pushed past the open edge", got)
+	got := s.engine.Left()
+	if len(got) != 1 || got[0].ID != 1 {
+		t.Fatalf("Left = %v, want the box pushed past the open edge", got)
+	}
+	if box := got[0].Box; box.BottomRight.X > 0 || box.TopLeft.Y != 100 {
+		t.Errorf("Left names it at %v, want it wholly past the edge at x=0, where it was on y", box.AABB)
 	}
 	if len(s.moved) != 0 {
 		t.Errorf("Moved heard %v for a box that left the world", s.moved)

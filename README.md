@@ -155,8 +155,8 @@ in the top-left quarter: [1 2]
 3. **Tick** the engine. Every two `CanCollide` boxes within `Reach` of each other are paired; each
    overlapping pair is put to `Handler.Touch`, which may confirm it, refine the penetration, or veto
    it; confirmed pairs are separated over up to `Iterations` passes and reported by `Contact`; every
-   pushed box is reported once by `Moved`, or listed by `Engine.Left` when the push took it out
-   through an open edge.
+   pushed box is reported once by `Moved`, or listed by `Engine.Left` — with the box it came to
+   rest at — when the push took it out through an open edge.
 4. **Ask.** `Query` and `Scan` see the pushed boxes as they are now.
 
 Items must stay put between rebuilds — their boxes may move, but the slice may not grow, shrink or

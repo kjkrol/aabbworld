@@ -10,7 +10,8 @@
 // veto the pair for this tick. Contact is told each confirmed pair once, with the penetration it is
 // being separated by. Moved is told every box the engine pushed, once, where it came to rest — the
 // caller writes that box back to whatever owns it. A box pushed out through an open edge is not
-// Moved; it is listed by [Engine.Left] until the next Tick.
+// Moved; it is listed by [Engine.Left] until the next Tick, as a [Leaver] with the box it came to
+// rest at, wholly past the edge, for the caller to write back the same way.
 //
 // # Config
 //

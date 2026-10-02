@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.10.0 — 2026-10-02
+
+**Collisions**
+- `collide.Engine.Left` returns `[]collide.Leaver` — the box's id and the box it came to rest at,
+  wholly past the open edge — instead of the ids alone. A box pushed out through an open edge is
+  still not `Moved`; its owner writes it back from `Left`. Before, it could not: the push was in
+  the index alone, the owner's box stayed where it was, and the next Rebuild put it back over what
+  had pushed it out. Breaks the callers of `Left`.
+
 ## v1.9.0 — 2026-09-25
 
 The ground on a grid, for sight and for collisions, without entities.

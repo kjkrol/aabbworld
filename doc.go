@@ -51,7 +51,7 @@
 //     within reach of each other are paired, each overlapping pair is put to the handler's Touch,
 //     confirmed pairs are separated over a few passes and reported by Contact, and every box that
 //     was pushed is reported once by Moved — unless the push took it out through an open edge, in
-//     which case it is listed by [collide.Engine.Left] instead. With collide.Config.Field the
+//     which case it is listed by [collide.Engine.Left] instead, with the box it came to rest at. With collide.Config.Field the
 //     engine also pushes every movable box out of the solid ground of a grid, in the same passes.
 //  4. Ask: [Space.Query] and [Space.Scan] see the pushed boxes as they are now; no further Rebuild is
 //     owed for that.
