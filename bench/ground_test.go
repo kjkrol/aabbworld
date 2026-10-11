@@ -67,6 +67,40 @@ func (g *wallGround) Solid(_ uid.UID64, box geom.AABB, visit func(collide.FieldB
 	}
 }
 
+// segmentGround is the same walls as a WallField: each cell's wall a FieldWall along the row,
+// half a cell thick, joined to the cells beside it.
+type segmentGround struct{ *wallGround }
+
+func (g segmentGround) Solid(uid.UID64, geom.AABB, func(collide.FieldBox) bool) {}
+
+func (g segmentGround) Walls(_ uid.UID64, box geom.AABB, visit func(collide.FieldWall) bool) {
+	x0 := int(math.Floor(box.TopLeft.X / groundCell))
+	y0 := int(math.Floor(box.TopLeft.Y / groundCell))
+	x1 := int(math.Ceil(box.BottomRight.X / groundCell))
+	y1 := int(math.Ceil(box.BottomRight.Y / groundCell))
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			if !g.at(x, y) {
+				continue
+			}
+			var open collide.Ends
+			if !g.at(x-1, y) {
+				open |= collide.EndA
+			}
+			if !g.at(x+1, y) {
+				open |= collide.EndB
+			}
+			mid := (float64(y) + 0.5) * groundCell
+			w := collide.FieldWall{A: geom.NewVec(float64(x)*groundCell, mid),
+				B: geom.NewVec(float64(x+1)*groundCell, mid), Half: groundCell / 2,
+				Cell: uint64(y*groundSide + x), Open: open}
+			if !visit(w) {
+				return
+			}
+		}
+	}
+}
+
 // quiet is a Handler that confirms every pair and listens to nothing.
 type quiet struct{}
 
@@ -111,7 +145,12 @@ func Benchmark_Collide_Ground(b *testing.B) {
 		name  string
 		walls []aabbworld.Item
 		field collide.SolidField
-	}{{"ground=field", nil, newWallGround()}, {"ground=run-entities", runs, nil}, {"ground=cell-entities", cells, nil}} {
+	}{
+		{"ground=field", nil, newWallGround()},
+		{"ground=walls", nil, segmentGround{newWallGround()}},
+		{"ground=run-entities", runs, nil},
+		{"ground=cell-entities", cells, nil},
+	} {
 		b.Run(v.name, func(b *testing.B) {
 			space, err := aabbworld.NewSpace(aabbworld.Config{Width: 2000, Height: 2000, BucketSize: 64})
 			if err != nil {

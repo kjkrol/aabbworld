@@ -158,6 +158,11 @@ row of a 100×100 grid of 20-unit cells, with a gap every tenth cell — the wal
 | one static entity per run | 72 µs |
 | one static entity per cell | 184 µs |
 
+The same walls as `collide.FieldWall`s (v1.12.0), a wall a cell along the row, half a cell thick,
+joined to the next, cost a tenth more than the boxes — the test of a wall at any angle is four axes
+to the box's two (measured on 2026-10-11: 188 µs boxes, 200 µs walls, on a slower day of the
+machine). The field without walls measures as in v1.11.0.
+
 The field costs a little more than walls merged into runs, and nothing depends on how the walls are
 laid out or on rebuilding them when one changes. A wall of one entity per cell also catches: a box
 straddling the seam between two of them is pushed sideways both ways and stays in the wall, where the

@@ -27,9 +27,13 @@
 // movable box (CanCollide, not Static) that moved since it last asked, and pushes the box out of
 // each it overlaps through the shallowest side marked open in [FieldBox.Open] — the shallowest
 // side at all when none is — so a box sliding along a wall of many cells never catches on the
-// seams between them. A Sensor is told but not pushed. A pushed box is Moved like any other. A
-// Handler that is also a [FieldHandler] is asked TouchField and told ContactField once per entity
-// and cell a tick; any other Handler hears nothing of the ground.
+// seams between them. A field that is also a [WallField] hands the engine its walls at any angle
+// besides, after the boxes: a [FieldWall] is a segment Half thick either side, and a box is pushed
+// out of it square to it — pieces joined end to end slide a box along them as one wall — or round
+// a free end ([FieldWall.Open]) where that is shorter. A Sensor is told but not pushed. A pushed
+// box is Moved like any other. A Handler that is also a [FieldHandler] is asked TouchField and told
+// ContactField once per entity and cell a tick, boxes and walls of one cell alike; any other
+// Handler hears nothing of the ground.
 //
 // # Engine
 //

@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.12.0 — 2026-10-11
+
+**Collisions**
+- `collide.WallField`: a `SolidField` with walls at any angle besides its boxes,
+  `Walls(id, box, visit(FieldWall) bool)`, asked after the boxes. A `FieldWall{A, B, Half, Cell,
+  Open}` is a segment `Half` thick either side; a box is pushed out of it square to it — pieces
+  joined end to end slide a box along them as one wall, never catching at a joint — and round a free
+  end (`Ends`: `EndA`, `EndB`) where that is the shorter way. A sensor is told and not pushed, a
+  `FieldHandler` hears of a cell's boxes and walls once a tick, a warm tick allocates nothing.
+  Tests hold a wall along an axis against the box of the same rectangle, open along its long sides
+  and at its free ends; see [BENCHMARKS.md](BENCHMARKS.md#solid-ground--benchmark_collide_ground).
+
 ## v1.11.0 — 2026-10-11
 
 **Sight**

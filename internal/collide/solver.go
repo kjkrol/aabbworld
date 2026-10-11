@@ -161,7 +161,7 @@ func (s *Solver) pushOutOfGround(items []spatial.Item, surface *iplane.Surface, 
 	s.readyField()
 	p := &s.field
 	if p.visit == nil {
-		p.visit = p.meet
+		p.visit, p.wall = p.meet, p.meetWall
 	}
 	p.field, p.surface = field, surface
 	any := false
@@ -175,6 +175,10 @@ func (s *Solver) pushOutOfGround(items []spatial.Item, surface *iplane.Surface, 
 		p.item, p.it, p.sensor, p.pushed = int32(i), it, it.Caps&spatial.Sensor != 0, false
 		box := geom.AABB{TopLeft: it.Box.TopLeft, BottomRight: it.Box.TopLeft.Add(it.Box.Size)}
 		field.Solid.Solid(it.ID, box, p.visit)
+		if field.Walls != nil {
+			box = geom.AABB{TopLeft: it.Box.TopLeft, BottomRight: it.Box.TopLeft.Add(it.Box.Size)}
+			field.Walls.Walls(it.ID, box, p.wall)
+		}
 		if p.pushed {
 			s.movedAt[i] = s.clock
 			s.fieldMoved = append(s.fieldMoved, int32(i))

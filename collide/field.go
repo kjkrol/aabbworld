@@ -23,6 +23,34 @@ type FieldBox struct {
 	Open Sides
 }
 
+// WallField is a SolidField with walls at any angle besides its boxes: Walls calls visit with every
+// wall that box of entity id may overlap, for that entity, in the frame of the box asked about;
+// visit returning false ends the walk. An Engine asks a SolidField that is one for its walls after
+// its boxes.
+type WallField interface {
+	SolidField
+	Walls(id uid.UID64, box geom.AABB, visit func(FieldWall) bool)
+}
+
+// FieldWall is one wall of a WallField: Half thick either side of the segment from A to B, the
+// cell of the ground it is, for the handler, and which of its ends stand free. A box is pushed out
+// of it square to it — so pieces of wall joined end to end slide a box along them as one — and
+// round a free end where that is the shorter way.
+type FieldWall struct {
+	A, B geom.Vec
+	Half float64
+	Cell uint64
+	Open Ends
+}
+
+// Ends is a set of the ends of a wall.
+type Ends uint8
+
+const (
+	EndA Ends = 1 << iota
+	EndB
+)
+
 // Sides is a set of the sides of a box.
 type Sides uint8
 

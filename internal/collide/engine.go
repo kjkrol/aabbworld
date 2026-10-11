@@ -44,6 +44,9 @@ func New(grid *spatial.Grid, surface *iplane.Surface, handler Handler, reach flo
 	e.onPair, e.touch, e.tell, e.visit = e.add, e.ask, e.report, e.pushed
 	if field != nil {
 		e.field = &Field{Solid: field}
+		if wf, ok := field.(pcollide.WallField); ok {
+			e.field.Walls = wf
+		}
 		if fh, ok := handler.(pcollide.FieldHandler); ok {
 			e.field.Touch = func(item int32, cell uint64, pen geom.Vec) (geom.Vec, bool) {
 				return fh.TouchField(e.items[item].ID, cell, pen)

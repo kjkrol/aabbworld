@@ -94,7 +94,10 @@
 // out. collide.Config.Field is a collide.SolidField: for every movable box the engine asks for the
 // solid boxes of the ground around it, with the sides of each that face open ground, and pushes the
 // box out only through those — a box sliding along a wall of many cells never catches on a seam.
-// A collide.FieldHandler hears of each contact with the ground once per entity and cell a tick.
+// One that is a collide.WallField hands walls at any angle besides — a railing along a slanted
+// bridge — each a collide.FieldWall a box is pushed out of square to it, round a free end where
+// that is shorter. A collide.FieldHandler hears of each contact with the ground once per entity
+// and cell a tick.
 //
 // # Package dependencies
 //
