@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/internal/raycast"
 	"github.com/kjkrol/uid"
 )
 
@@ -18,6 +19,8 @@ type elevatedOracle struct {
 	ground func(geom.Vec) float64
 	eye    float64
 	step   float64
+	// profile, when set, gives the ground points of a ray in place of a sample every step
+	profile raycast.ProfileField
 }
 
 type oracleHit struct {
@@ -62,11 +65,29 @@ func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach f
 	}
 	sort.Slice(hits, func(i, j int) bool { return hits[i].near < hits[j].near })
 
-	var points []groundPoint
-	for d := o.step; d < radius; d += o.step {
-		points = append(points, groundPoint{d, o.ground(at(d)), 0})
+	var points, faces []groundPoint
+	if o.profile != nil {
+		o.profile.Along(origin, geom.NewVec(dx, dy), radius, func(d, alt float64) bool {
+			points = append(points, groundPoint{d, alt, 0})
+			return true
+		})
+		// the ground where the ray meets each box, straight between the profile's points: it hides,
+		// up to the box, what lies behind it
+		prof := append([]groundPoint{{0, o.ground(origin), 0}}, points...)
+		for _, h := range hits {
+			for k := 1; k < len(prof); k++ {
+				if a, b := prof[k-1], prof[k]; h.near > a.dist && h.near < b.dist {
+					f := (h.near - a.dist) / (b.dist - a.dist)
+					faces = append(faces, groundPoint{h.near, a.alt + f*(b.alt-a.alt), h.id})
+				}
+			}
+		}
+	} else {
+		for d := o.step; d < radius; d += o.step {
+			points = append(points, groundPoint{d, o.ground(at(d)), 0})
+		}
+		points = append(points, groundPoint{radius, o.ground(at(radius)), 0})
 	}
-	points = append(points, groundPoint{radius, o.ground(at(radius)), 0})
 	for _, h := range hits {
 		if h.standing && h.near > 0 && h.near <= radius {
 			points = append(points, groundPoint{h.near, h.band[0], h.id})
@@ -83,6 +104,11 @@ func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach f
 	aboveGround := func(tan, upto float64) bool {
 		for _, p := range points {
 			if p.dist < upto && (p.alt-o.eye)/p.dist > tan {
+				return false
+			}
+		}
+		for _, f := range faces {
+			if f.dist <= upto && (f.alt-o.eye)/f.dist > tan {
 				return false
 			}
 		}

@@ -25,6 +25,9 @@ type Cone struct {
 	// sixteenth of Radius); nil is flat ground at 0.
 	Ground     func(p geom.Vec) float64
 	GroundStep float64
+	// Profile is the ground along each ray, exactly, in place of Ground sampled every GroundStep:
+	// the points where its slope changes; Ground still stands a box on the ground. nil: none.
+	Profile ProfileField
 	// Cover is the ground cover of a world on a grid — walls, forests — walked cell by cell along
 	// each ray instead of being entities in the Space; nil is none.
 	Cover CoverField
@@ -37,6 +40,15 @@ type Cone struct {
 // ≤ 0 blocks). visit returning false ends the walk. The owner of the grid walks it exactly (a DDA
 // over its cells), so what lies behind a wall on a plane is never read.
 type CoverField = iraycast.CoverField
+
+// ProfileField is the ground along a ray, exactly: Along follows the ray from origin along the unit
+// dir for length and calls visit, nearest first, with every point where the ground's slope changes —
+// a ground of flat facets, the edges and folds of the cells the ray crosses — and with length
+// itself: how far along (d, above 0) and the ground's height there; visit returning false ends the
+// walk. Between those points the ground is straight, so what it hides is decided there alone: the
+// owner of a faceted ground gives a ray a few points a cell, read off its corners, in place of a
+// sample every GroundStep. A wrapping world's owner folds the ray onto the world itself.
+type ProfileField = iraycast.ProfileField
 
 // View is one observer's line of sight: filled by Space.Scan, then read as many ways as needed.
 // The zero value is ready; it must not be copied once scanned, and serves one goroutine.

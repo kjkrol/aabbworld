@@ -27,6 +27,7 @@ type Cone struct {
 	Elevation    func(id uid.UID64) (bottom, top float64)
 	Ground       func(p geom.Vec) float64
 	GroundStep   float64
+	Profile      ProfileField
 	Cover        CoverField
 }
 
@@ -79,14 +80,14 @@ func (v *View) Scan(space QueryableSpace, observer uid.UID64, cone Cone) bool {
 	v.coneDir = math.Atan2(cone.Direction.Y, cone.Direction.X)
 	v.halfAngle = cone.HalfAngle
 	v.radius = cone.Radius
-	v.elevated = cone.Elevation != nil || cone.Ground != nil
+	v.elevated = cone.Elevation != nil || cone.Ground != nil || cone.Profile != nil
 	var elev *elevation
 	if v.elevated {
 		step := cone.GroundStep
 		if step <= 0 {
 			step = cone.Radius / 16
 		}
-		v.elev = elevation{eye: cone.Eye, ground: cone.Ground, step: step, w: wrapSize(w, wrapX), h: wrapSize(h, wrapY)}
+		v.elev = elevation{eye: cone.Eye, ground: cone.Ground, profile: cone.Profile, step: step, w: wrapSize(w, wrapX), h: wrapSize(h, wrapY)}
 		elev = &v.elev
 	}
 
@@ -224,6 +225,7 @@ type scratch struct {
 	shade     shadowing
 	field     CoverField // the ground cover the casts walk, nil for none
 	cover     coverWalk  // the current cast's stretches of cover
+	profile   profileWalk
 }
 
 func (s *scratch) reset() {

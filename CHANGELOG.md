@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.11.0 — 2026-10-11
+
+**Sight**
+- `Cone.Profile` is a `ProfileField`: `Along(origin, dir, length, visit(d, alt) bool)`, the ground
+  along a ray as the points where its slope changes, and its end. Set, a ray reads the ground off
+  it instead of sampling `Ground` every `GroundStep`: a ground of flat facets — a terrain of
+  triangles over a grid — is read a few points a cell, and what it hides is exact; where the ray
+  meets a box, the ground there, straight between the points either side, hides what lies behind
+  it. `Ground` still stands a box on the ground. Tests hold a scan over a profile against the oracle
+  reading the same points and against the ground sampled a hundred times as finely.
+
 ## v1.10.0 — 2026-10-02
 
 **Collisions**

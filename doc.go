@@ -71,9 +71,11 @@
 // when everything blocks. Every entity sight reaches is seen, a forest looked into as much as a
 // wall looked at.
 //
-// Sight has heights once Cone.Elevation or Cone.Ground is set: the eye is Cone.Eye up, an entity
-// spans its bottom to its top, the ground lies at Cone.Ground of a point and is sampled every
-// Cone.GroundStep along a ray. An entity is seen when the straight line from the eye to its top
+// Sight has heights once Cone.Elevation, Cone.Ground or Cone.Profile is set: the eye is Cone.Eye
+// up, an entity spans its bottom to its top, the ground lies at Cone.Ground of a point and is
+// sampled every Cone.GroundStep along a ray — or, for a ground of flat facets, Cone.Profile hands
+// each ray the points where its slope changes, a few a cell in place of a sample every step, and
+// what the ground hides is then exact. An entity is seen when the straight line from the eye to its top
 // clears the ground and every nearer blocking entity's band, within the budget — a see-through
 // entity charges only the stretch the line spends inside its band. The reach of an angle is the
 // farthest lit ground, so a hawk looks over a wall the walker beside it is stopped by, and a hill

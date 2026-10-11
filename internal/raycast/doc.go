@@ -56,7 +56,10 @@
 // its foot as on a plane; a wall lower than the eye is looked over and shades the ground only for
 // the stretch its top hides; a hill hides the plain behind it from the lowland and not from a hawk.
 // Over uneven ground the whole cone is sampled every two degrees; with Ground nil only each box's
-// span is.
+// span is. With Cone.Profile set the ground of a ray is not sampled every GroundStep but read off
+// the profile: the points where its slope changes, between which it is straight, so a nearer
+// stretch hides most at its ends — and where the ray meets a box, the ground there straight between
+// the points either side hides what lies behind it, the box's top and foot included.
 //
 // One reach per angle cannot show ground that is hidden and then seen again, and with heights the
 // reach of sight is not the reach of the ground: past a cliff the plain is hidden, a hawk above it

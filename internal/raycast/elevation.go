@@ -6,13 +6,61 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 )
 
+// ProfileField is the ground along a ray, exactly: Along follows the ray from origin along the unit
+// dir for length and calls visit, nearest first, with every point of it where the ground's slope
+// changes — a ground of flat facets, the edges and folds of the cells it crosses — and with length
+// itself: how far along it lies (d, above 0) and the ground's height there. visit returning false
+// ends the walk. A wrapping world's owner folds the ray onto the world itself.
+type ProfileField interface {
+	Along(origin, dir geom.Vec, length float64, visit func(d, alt float64) bool)
+}
+
 // elevation is what a cast needs beyond the plane when the cone has heights: the eye, the ground
-// and how far apart the ground is sampled along a ray.
+// and how far apart the ground is sampled along a ray, or its profile.
 type elevation struct {
-	eye    float64
-	ground func(geom.Vec) float64 // nil: flat at 0
-	step   float64
-	w, h   float64 // wrap sizes, 0 where the axis does not wrap
+	eye     float64
+	ground  func(geom.Vec) float64 // nil: flat at 0
+	profile ProfileField           // nil: the ground sampled every step
+	step    float64
+	w, h    float64 // wrap sizes, 0 where the axis does not wrap
+}
+
+// profileWalk is one cast's ground along its ray, as the profile hands it over.
+type profileWalk struct {
+	d, alt []float64
+	length float64
+	visit  func(d, alt float64) bool
+}
+
+// take records one point of the profile and says whether the walk goes on.
+func (w *profileWalk) take(d, alt float64) bool {
+	if d <= 0 {
+		return true
+	}
+	d = min(d, w.length)
+	w.d, w.alt = append(w.d, d), append(w.alt, alt)
+	return d < w.length
+}
+
+// walkProfile gathers the ground along one ray into sc.profile, ending at length: from the ground
+// there, or the profile's last height, where the profile stops short of it.
+func (sc *scratch) walkProfile(e *elevation, origin, dir geom.Vec, length float64) {
+	w := &sc.profile
+	w.d, w.alt, w.length = w.d[:0], w.alt[:0], length
+	if w.visit == nil {
+		w.visit = w.take
+	}
+	e.profile.Along(origin, dir, length, w.visit)
+	if n := len(w.d); n == 0 || w.d[n-1] < length {
+		alt := 0.0
+		switch {
+		case e.ground != nil:
+			alt = e.at(origin, dir, length)
+		case n > 0:
+			alt = w.alt[n-1]
+		}
+		w.d, w.alt = append(w.d, length), append(w.alt, alt)
+	}
 }
 
 // at is the ground height under the point dist along the ray, folded back onto a wrapping world.
@@ -86,24 +134,39 @@ func castElevated(origin geom.Vec, coneDir, rel, radius float64, cands []candida
 		r.shade.begin()
 	}
 	j := 0
-	for d := e.step; ; d += e.step {
-		if d > radius {
-			d = radius
+	if e.profile != nil {
+		sc.walkProfile(e, origin, dir, radius)
+		prevD, prevAlt := 0.0, sc.profile.alt[0]
+		if e.ground != nil {
+			prevAlt = e.at(origin, dir, 0)
 		}
-		for j < len(cross) && cross[j].near <= d {
-			r.enter(j)
-			if cross[j].rate == 0 {
-				r.walls++
-			} else {
-				r.veils++
+		for k, d := range sc.profile.d {
+			alt := sc.profile.alt[k]
+			for j < len(cross) && cross[j].near <= d {
+				// the ground where the ray meets the box, straight between the points either side,
+				// hides what the points alone would not: a box on a slope rising to its face
+				if near := cross[j].near; near > prevD && near < d {
+					r.raise(near, prevAlt+(near-prevD)/(d-prevD)*(alt-prevAlt))
+				}
+				j = r.enterUpTo(cross[j].near, j)
 			}
-			j++
+			if lit := r.ground(d, alt, j, noCut); r.shade != nil {
+				r.shade.point(d, lit)
+			}
+			prevD, prevAlt = d, alt
 		}
-		if lit := r.ground(d, e.at(origin, dir, d), j, noCut); r.shade != nil {
-			r.shade.point(d, lit)
-		}
-		if d >= radius {
-			break
+	} else {
+		for d := e.step; ; d += e.step {
+			if d > radius {
+				d = radius
+			}
+			j = r.enterUpTo(d, j)
+			if lit := r.ground(d, e.at(origin, dir, d), j, noCut); r.shade != nil {
+				r.shade.point(d, lit)
+			}
+			if d >= radius {
+				break
+			}
 		}
 	}
 	if r.shade != nil {
@@ -117,6 +180,28 @@ func castElevated(origin geom.Vec, coneDir, rel, radius float64, cands []candida
 		out.hit = true // a wall of cover, no entity
 	}
 	return out
+}
+
+// raise has the ground at d, alt high, hide what lies behind it, as a target of none.
+func (r *ray) raise(d, alt float64) {
+	if tan := (alt - r.e.eye) / d; tan > r.horizon {
+		r.horizon = tan
+	}
+}
+
+// enterUpTo enters every crossing from j on that begins no further than d, and says where it
+// stopped.
+func (r *ray) enterUpTo(d float64, j int) int {
+	for j < len(r.cross) && r.cross[j].near <= d {
+		r.enter(j)
+		if r.cross[j].rate == 0 {
+			r.walls++
+		} else {
+			r.veils++
+		}
+		j++
+	}
+	return j
 }
 
 // enter looks at crossing j as a target and, when it stands on the ground, lights its foot.

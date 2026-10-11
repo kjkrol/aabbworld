@@ -43,7 +43,7 @@ func sweep(origin geom.Vec, coneDir, halfAngle, radius float64, cands []candidat
 	add(halfAngle)
 	// Over uneven ground or ground cover the reach changes everywhere, so the whole cone is sampled
 	// at the arc step, and around cover edges more finely still.
-	everywhere := elev != nil && elev.ground != nil || sc.field != nil
+	everywhere := elev != nil && (elev.ground != nil || elev.profile != nil) || sc.field != nil
 	if everywhere {
 		for a := -halfAngle + arcStep; a < halfAngle; a += arcStep {
 			add(a)
