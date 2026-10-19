@@ -52,20 +52,30 @@ func Benchmark_Surface_Expand(b *testing.B) {
 	}
 }
 
-// Benchmark_Surface_Translate moves a box across the far edge on one axis and back on the other.
+// Benchmark_Surface_Translate moves a box across the far edge on one axis and back on the other,
+// and one that stays well inside, by a few units.
 func Benchmark_Surface_Translate(b *testing.B) {
+	cases := []struct {
+		name     string
+		template plane.AABB
+		delta    geom.Vec
+	}{
+		{"across", plane.NewAABB(geom.NewVec(80, 80), 15, 10), geom.NewVec(12, -18)},
+		{"inside", plane.NewAABB(geom.NewVec(40, 40), 15, 10), geom.NewVec(3, -2)},
+	}
 	for _, s := range surfaces {
-		b.Run(s.name, func(b *testing.B) {
-			surface := s.make(100, 100)
-			template := plane.NewAABB(geom.NewVec(80, 80), 15, 10)
-			delta := geom.NewVec(12, -18)
-			b.ReportAllocs()
-			for b.Loop() {
-				box := template
-				surface.Translate(&box, delta)
-				aabbSink = box
-			}
-		})
+		for _, c := range cases {
+			b.Run(s.name+"/"+c.name, func(b *testing.B) {
+				surface := s.make(100, 100)
+				template, delta := c.template, c.delta
+				b.ReportAllocs()
+				for b.Loop() {
+					box := template
+					surface.Translate(&box, delta)
+					aabbSink = box
+				}
+			})
+		}
 	}
 }
 

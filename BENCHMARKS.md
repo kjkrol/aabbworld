@@ -174,7 +174,14 @@ field pushes it out through the only open side. The solver without a field measu
 |:---|---:|---:|
 | `Surface.WrapAABB` (box across the far corner) | 25.7 ns | 30.6 ns |
 | `Surface.Expand` (grow by 5 near the far corner) | 11.2 ns | 16.6 ns |
-| `Surface.Translate` (across the far edge and back) | 13.5 ns | 17.7 ns |
+| `Surface.Translate` (across the far edge and back) | 12 ns | 14 ns |
+| `Surface.Translate` (staying inside) | 8 ns | 9 ns |
+
+`Translate` is measured on 2026-10-19 (v1.13.0), when a box that lands inside the world stopped
+being folded: `Translate` keeps it where it is before calling `move`, so inside costs the same
+under every edge rule, and across the torus still folds one axis. Before, inside cost 13 ns
+euclidean and 16 ns toroidal, across 13 ns and 17 ns; medians of 16 runs, the v1.12.0 tree and
+the new one alternately, on an idle machine.
 
 | Operation | ns |
 |:---|---:|

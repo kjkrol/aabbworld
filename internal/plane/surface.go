@@ -56,10 +56,23 @@ func (s *Surface) Expand(aabb *plane.AABB, margin float64) {
 
 // Translate moves aabb by delta: wrapped, stopped whole, or let go, by the rule of each axis.
 func (s *Surface) Translate(aabb *plane.AABB, delta geom.Vec) {
-	aabb.TopLeft.X, aabb.BottomRight.X, aabb.Overhang.X =
-		move(aabb.TopLeft.X+delta.X, aabb.Size.X, s.size.X, s.edges&WrapX != 0, s.edges&OpenX != 0)
-	aabb.TopLeft.Y, aabb.BottomRight.Y, aabb.Overhang.Y =
-		move(aabb.TopLeft.Y+delta.Y, aabb.Size.Y, s.size.Y, s.edges&WrapY != 0, s.edges&OpenY != 0)
+	if lo := aabb.TopLeft.X + delta.X; inside(lo, aabb.Size.X, s.size.X) {
+		aabb.TopLeft.X, aabb.BottomRight.X, aabb.Overhang.X = lo, lo+aabb.Size.X, 0
+	} else {
+		aabb.TopLeft.X, aabb.BottomRight.X, aabb.Overhang.X =
+			move(lo, aabb.Size.X, s.size.X, s.edges&WrapX != 0, s.edges&OpenX != 0)
+	}
+	if lo := aabb.TopLeft.Y + delta.Y; inside(lo, aabb.Size.Y, s.size.Y) {
+		aabb.TopLeft.Y, aabb.BottomRight.Y, aabb.Overhang.Y = lo, lo+aabb.Size.Y, 0
+	} else {
+		aabb.TopLeft.Y, aabb.BottomRight.Y, aabb.Overhang.Y =
+			move(lo, aabb.Size.Y, s.size.Y, s.edges&WrapY != 0, s.edges&OpenY != 0)
+	}
+}
+
+// inside reports whether a box of length from lo lies within the world: every edge rule leaves it
+func inside(lo, length, world float64) bool {
+	return lo >= 0 && lo < world && lo+length <= world
 }
 
 // Left reports whether aabb lies wholly past an open edge.
