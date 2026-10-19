@@ -182,3 +182,49 @@ func expectAABBFragments(t *testing.T, b plane.AABB, expected map[plane.FragPosi
 		}
 	}
 }
+
+func TestTranslate_InsideOrTouchingTheEdgeAgreesWithTheFold(t *testing.T) {
+	// before is the rule of an axis as it was when every box was folded.
+	before := func(lo, length, world float64, wraps, open bool) (float64, float64, float64) {
+		switch {
+		case wraps:
+			return fold(lo, length, world)
+		case open:
+			return lo, lo + length, 0
+		default:
+			lo = clamp(lo, max(world-length, 0))
+			return lo, lo + length, 0
+		}
+	}
+
+	// A 10-long box from 50 lands at 0, at world-10, well inside, and 5 past the edge.
+	pushes := []float64{-50, 40, -13, 45}
+	for _, tc := range []struct {
+		name  string
+		edges Edges
+	}{{"toroidal", Torus}, {"euclidean", 0}, {"open", OpenX | OpenY}} {
+		s := NewSurface(100, 100, tc.edges)
+		for _, dx := range pushes {
+			for _, dy := range pushes {
+				box := plane.NewAABB(vec(50, 50), 10, 10)
+				s.Translate(&box, vec(dx, dy))
+
+				x0, x1, ox := before(50+dx, 10, 100, tc.edges&WrapX != 0, tc.edges&OpenX != 0)
+				y0, y1, oy := before(50+dy, 10, 100, tc.edges&WrapY != 0, tc.edges&OpenY != 0)
+				want := plane.AABB{
+					AABB: geom.NewAABB(vec(x0, y0), vec(x1, y1)), Size: vec(10, 10), Overhang: vec(ox, oy),
+				}
+				if box != want {
+					t.Fatalf("%s, push (%v,%v): box %+v, want %+v", tc.name, dx, dy, box, want)
+				}
+			}
+		}
+	}
+
+	torus := NewToroidal2D(100, 100)
+	point := plane.NewAABB(vec(90, 90), 0, 0)
+	torus.Translate(&point, vec(10, 10))
+	if point.TopLeft != vec(0, 0) || point.BottomRight != vec(0, 0) {
+		t.Errorf("zero-length box pushed onto the far edge of the torus came to %+v, want 0,0", point)
+	}
+}

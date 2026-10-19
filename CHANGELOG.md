@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.13.0 — 2026-10-19
+
+**Plane**
+- `Surface.Translate` keeps a box that stays inside the world where it is without folding it: the
+  same result under every edge rule, a fraction of the cost.
+
 ## v1.12.0 — 2026-10-11
 
 **Collisions**
