@@ -100,10 +100,14 @@ func (s *Solver) Solve(
 	touch Touch, onContact func(i int, pen geom.Vec), field *Field,
 ) {
 	pairs, states, movedAt := s.pairs, s.states[:len(s.pairs)], s.movedAt
+	held := len(s.boxes)
 	s.boxes = slices.Grow(s.boxes[:0], len(pairs))[:len(pairs)]
 	boxes := s.boxes
 	for i := range pairs {
 		boxes[i] = [2]*plane.AABB{items[pairs[i].A].Box, items[pairs[i].B].Box}
+	}
+	if held > len(boxes) {
+		clear(s.boxes[len(boxes):held])
 	}
 	for range iterations {
 		moved := false
