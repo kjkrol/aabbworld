@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.14.1 — 2026-10-20
+
+**Index**
+- After a `Query` several goroutines may `Scan` a space at once again: the ids' positions, which
+  v1.14.0 left to the first `Scan`, are built with the cells as the first `Query` after a Rebuild
+  builds them, so a reader that queries once before fanning out (gram's vision) reads only.
+
 ## v1.14.0 — 2026-10-20
 
 **Index**

@@ -148,8 +148,13 @@ func (g *Grid) RebuildRuns(runs []Run, items []Item) {
 // Invalidate marks the cells as behind the boxes of the items, which have moved since they were built.
 func (g *Grid) Invalidate() { g.stale = true }
 
-// index builds the cells from the records as they are now.
+// index builds the cells from the records as they are now, and the ids' positions once a
+// Rebuild: after the first Query every reader of the grid only reads, so several goroutines may
+// scan it at once.
 func (g *Grid) index() {
+	if g.mapped != g.rebuilds {
+		g.mapIDs()
+	}
 	g.stale = false
 	g.pieces = g.pieces[:0]
 	cells := int(g.side) * int(g.side)
