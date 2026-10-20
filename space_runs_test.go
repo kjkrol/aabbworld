@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"sync"
 	"testing"
 	"unsafe"
 
@@ -249,5 +250,28 @@ func TestRebuildRuns_QueryAndTickDoNotAllocateOnceWarm(t *testing.T) {
 	}
 	if n := testing.AllocsPerRun(20, tick); n != 0 {
 		t.Errorf("a warm tick over runs allocates %v times", n)
+	}
+}
+
+func TestScan_AfterAQueryGoroutinesScanAtOnce(t *testing.T) {
+	rng := rand.New(rand.NewPCG(3, 9))
+	for _, e := range entries {
+		c := newCrowd(t, 1000, 800, 0)
+		c.scatter(rng, 400, []float64{4, 16, 60}, false)
+		c.entry = e
+		c.rebuild()
+		c.space.Query(geom.NewAABBAt(geom.NewVec(0, 0), 1, 1), aabbworld.AnyCapability,
+			func(uid.UID64) {})
+		cone := aabbworld.Cone{Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 3, Radius: 300}
+		var wg sync.WaitGroup
+		for w := range 4 {
+			wg.Go(func() {
+				var view aabbworld.View
+				for o := w; o < 400; o += 4 {
+					c.space.Scan(uid.UID64(o), cone, &view)
+				}
+			})
+		}
+		wg.Wait()
 	}
 }
