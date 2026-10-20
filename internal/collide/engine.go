@@ -25,7 +25,7 @@ type Engine struct {
 	iterations int
 
 	solver Solver
-	items  []spatial.Item
+	items  []spatial.Entry
 	left   []pcollide.Leaver
 	moved  []uint32
 	stamp  uint32
@@ -57,8 +57,8 @@ func New(grid *spatial.Grid, surface *iplane.Surface, handler Handler, reach flo
 	return e
 }
 
-// Tick separates every overlapping pair the grid holds now and reports as it goes. The grid
-// answers its next Query with the pushed boxes on its own; no Rebuild is owed for that.
+// Tick separates every overlapping pair the grid holds now and reports as it goes, pushing the
+// boxes where they lie. The grid answers its next Query with them on its own; no Rebuild is owed.
 func (e *Engine) Tick() {
 	e.items = e.grid.Items()
 	e.solver.Reset(len(e.items))
@@ -103,11 +103,11 @@ func (e *Engine) pushed(item int32) {
 	}
 	e.moved[item] = e.stamp
 	it := &e.items[item]
-	if e.surface.Left(&it.Box) {
-		e.left = append(e.left, pcollide.Leaver{ID: it.ID, Box: it.Box})
+	if e.surface.Left(it.Box) {
+		e.left = append(e.left, pcollide.Leaver{ID: it.ID, Box: *it.Box})
 		return
 	}
-	e.handler.Moved(it.ID, it.Box)
+	e.handler.Moved(it.ID, *it.Box)
 }
 
 func flagsOf(a, b spatial.Capability) uint8 {

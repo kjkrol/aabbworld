@@ -89,6 +89,15 @@ func newCrowd(rng *rand.Rand, surface *iplane.Surface, count int, field float64)
 	return c
 }
 
+// entries are items where they lie, as a grid lists them.
+func entries(items []spatial.Item) []spatial.Entry {
+	es := make([]spatial.Entry, len(items))
+	for i := range items {
+		es[i] = spatial.Entry{Box: &items[i].Box, ID: items[i].ID, Caps: items[i].Caps}
+	}
+	return es
+}
+
 // fresh is a copy of the crowd's items, so one crowd can be solved again from the same start.
 func (c crowd) fresh() []spatial.Item {
 	items := make([]spatial.Item, len(c.items))
@@ -117,7 +126,8 @@ func TestSolve_SkippingChangesNothing(t *testing.T) {
 			for _, p := range c.pairs {
 				s.Add(p)
 			}
-			s.Solve(got, surface, 16, nil, func(i int, _ geom.Vec) { gotContacts = append(gotContacts, i) }, nil)
+			onContact := func(i int, _ geom.Vec) { gotContacts = append(gotContacts, i) }
+			s.Solve(entries(got), surface, 16, nil, onContact, nil)
 
 			for i := range want {
 				if got[i].Box.AABB != want[i].Box.AABB {
@@ -154,7 +164,7 @@ func TestSolve_MeasuresLessThanEveryPairEveryPass(t *testing.T) {
 	for _, p := range c.pairs {
 		s.Add(p)
 	}
-	s.Solve(items, surface, 16, nil, nil, nil)
+	s.Solve(entries(items), surface, 16, nil, nil, nil)
 	if int(s.clock) >= everything {
 		t.Errorf("measured %d pairs, every pair every pass is %d — want the active set to save measurements", s.clock, everything)
 	}

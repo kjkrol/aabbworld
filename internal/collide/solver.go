@@ -2,6 +2,7 @@ package collide
 
 import (
 	"math"
+	"slices"
 
 	"github.com/kjkrol/aabbworld/geom"
 	iplane "github.com/kjkrol/aabbworld/internal/plane"
@@ -37,6 +38,7 @@ type Touch func(i int, pen geom.Vec) (geom.Vec, bool)
 type Solver struct {
 	pairs  []Pair
 	states []state
+	boxes  [][2]*plane.AABB // each pair's two boxes, where they lie
 
 	// clock counts measurements; movedAt is its reading when each item was last pushed.
 	clock   uint32
@@ -93,8 +95,20 @@ func (s *Solver) Pair(i int) *Pair { return &s.pairs[i] }
 
 // Solve reports each overlapping pair once and pushes it apart, and every movable item out of the
 // field's solid ground when there is one, in up to iterations passes.
-func (s *Solver) Solve(items []spatial.Item, surface *iplane.Surface, iterations int, touch Touch, onContact func(i int, pen geom.Vec), field *Field) {
+func (s *Solver) Solve(
+	items []spatial.Entry, surface *iplane.Surface, iterations int,
+	touch Touch, onContact func(i int, pen geom.Vec), field *Field,
+) {
 	pairs, states, movedAt := s.pairs, s.states[:len(s.pairs)], s.movedAt
+	held := len(s.boxes)
+	s.boxes = slices.Grow(s.boxes[:0], len(pairs))[:len(pairs)]
+	boxes := s.boxes
+	for i := range pairs {
+		boxes[i] = [2]*plane.AABB{items[pairs[i].A].Box, items[pairs[i].B].Box}
+	}
+	if held > len(boxes) {
+		clear(s.boxes[len(boxes):held])
+	}
 	for range iterations {
 		moved := false
 		for i := range pairs {
@@ -107,7 +121,7 @@ func (s *Solver) Solve(items []spatial.Item, surface *iplane.Surface, iterations
 			s.clock++
 			st.testedAt = s.clock
 
-			a, b := &items[p.A].Box, &items[p.B].Box
+			a, b := boxes[i][0], boxes[i][1]
 			pen, ok := penetration(a, b)
 			if !ok {
 				continue
@@ -157,7 +171,9 @@ func (s *Solver) Solve(items []spatial.Item, surface *iplane.Surface, iterations
 
 // pushOutOfGround pushes every movable item that moved since it last met the ground out of it, and
 // reports whether any was pushed.
-func (s *Solver) pushOutOfGround(items []spatial.Item, surface *iplane.Surface, field *Field) bool {
+func (s *Solver) pushOutOfGround(
+	items []spatial.Entry, surface *iplane.Surface, field *Field,
+) bool {
 	s.readyField()
 	p := &s.field
 	if p.visit == nil {

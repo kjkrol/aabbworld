@@ -77,6 +77,39 @@ type Item struct {
 	Caps Capability
 }
 
+// Run is a column of boxes in memory the caller owns: record i starts i·Stride bytes past Base,
+// with its box at BoxOff and its Capability at CapsOff, and IDs[i] names it.
+type Run struct {
+	IDs     []uid.UID64
+	Base    unsafe.Pointer
+	Stride  uintptr
+	BoxOff  uintptr
+	CapsOff uintptr
+}
+
+// RunOf is the run over rows, named by ids, with the box and the capability that box and caps
+// point at in a row.
+func RunOf[T any](
+	ids []uid.UID64, rows []T, box func(*T) *plane.AABB, caps func(*T) *Capability,
+) Run {
+	if len(ids) != len(rows) {
+		panic("aabbworld: RunOf over rows and ids of different lengths")
+	}
+	if len(rows) == 0 {
+		return Run{}
+	}
+	row := &rows[0]
+	stride, at := unsafe.Sizeof(*row), uintptr(unsafe.Pointer(row))
+	boxOff := uintptr(unsafe.Pointer(box(row))) - at
+	capsOff := uintptr(unsafe.Pointer(caps(row))) - at
+	if boxOff >= stride || stride-boxOff < unsafe.Sizeof(plane.AABB{}) || capsOff >= stride {
+		panic("aabbworld: RunOf with a box or a capability outside the row")
+	}
+	return Run{
+		IDs: ids, Base: unsafe.Pointer(row), Stride: stride, BoxOff: boxOff, CapsOff: capsOff,
+	}
+}
+
 // NewSpace builds a Space, fitting the world into the nearest power-of-two grid.
 func NewSpace(cfg Config) (*Space, error) {
 	if cfg.Width == 0 || cfg.Height == 0 || cfg.BucketSize == 0 {
@@ -92,12 +125,18 @@ func NewSpace(cfg Config) (*Space, error) {
 
 // Rebuild hands the Space items, which must stay put until the next Rebuild. Indexing waits for
 // the first Query or Scan that needs it, so several Rebuilds in a row cost one indexing.
-func (s *Space) Rebuild(items []Item) {
-	if len(items) == 0 {
-		s.grid.Rebuild(nil)
-		return
-	}
-	s.grid.Rebuild(unsafe.Slice((*spatial.Item)(unsafe.Pointer(&items[0])), len(items)))
+func (s *Space) Rebuild(items []Item) { s.RebuildRuns(nil, items) }
+
+// RebuildRuns is Rebuild over the boxes of runs and then of items, read where they lie: Query and
+// Scan see them as they are, and a Tick pushes them in place; a box may move between Rebuilds, a
+// Capability may not. Until the last Query, Scan or Tick before the next Rebuild, the memory under
+// both must hold the same records in the same places; a caller that moves records, as an ECS does
+// when entities migrate (in goke, once any table's ChunkSnapshot.TableVer changed), gathers its
+// runs again and rebuilds.
+func (s *Space) RebuildRuns(runs []Run, items []Item) {
+	s.grid.RebuildRuns(
+		unsafe.Slice((*spatial.Run)(unsafe.Pointer(unsafe.SliceData(runs))), len(runs)),
+		unsafe.Slice((*spatial.Item)(unsafe.Pointer(unsafe.SliceData(items))), len(items)))
 }
 
 // Place puts a fresh box under the edge rules; false if it lies wholly past an open edge.

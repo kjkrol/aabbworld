@@ -34,7 +34,7 @@ type fieldPass struct {
 	field   *Field
 	surface *iplane.Surface
 	item    int32
-	it      *spatial.Item
+	it      *spatial.Entry
 	sensor  bool
 	pushed  bool
 	met     map[fieldKey]uint8
@@ -46,7 +46,7 @@ type fieldPass struct {
 // settles the box as settle does, written out here: called for every box met, the call to settle
 // cost a twentieth of a tick.
 func (p *fieldPass) meet(fb pcollide.FieldBox) bool {
-	box := &p.it.Box
+	box := p.it.Box
 	a := geom.AABB{TopLeft: box.TopLeft, BottomRight: box.TopLeft.Add(box.Size)}
 	b := fb.Box
 	if a.BottomRight.X <= b.TopLeft.X || a.TopLeft.X >= b.BottomRight.X || a.BottomRight.Y <= b.TopLeft.Y || a.TopLeft.Y >= b.BottomRight.Y {
@@ -81,7 +81,7 @@ func (p *fieldPass) meet(fb pcollide.FieldBox) bool {
 
 // meetWall pushes the item out of one wall it overlaps.
 func (p *fieldPass) meetWall(w pcollide.FieldWall) bool {
-	box := &p.it.Box
+	box := p.it.Box
 	a := geom.AABB{TopLeft: box.TopLeft, BottomRight: box.TopLeft.Add(box.Size)}
 	if push, ok := wallPush(a, w); ok {
 		p.settle(w.Cell, push)
@@ -113,7 +113,7 @@ func (p *fieldPass) settle(cell uint64, push geom.Vec) {
 	if p.sensor || push == (geom.Vec{}) {
 		return
 	}
-	p.surface.Translate(&p.it.Box, push)
+	p.surface.Translate(p.it.Box, push)
 	p.pushed = true
 }
 
@@ -182,6 +182,6 @@ func pushOut(a, b geom.AABB, open pcollide.Sides) geom.Vec {
 }
 
 // movable reports whether an item takes part in collisions and something may shift it.
-func movable(it *spatial.Item) bool {
+func movable(it *spatial.Entry) bool {
 	return it.Caps&spatial.CanCollide != 0 && it.Caps&spatial.Static == 0
 }

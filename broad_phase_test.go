@@ -2,6 +2,7 @@ package aabbworld_test
 
 import (
 	"cmp"
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"testing"
@@ -31,6 +32,49 @@ func sortPairs(pairs []idPair) {
 type crowd struct {
 	space *aabbworld.Space
 	items []aabbworld.Item
+	entry entry
+
+	records []record
+	ids     []uid.UID64
+	runs    []aabbworld.Run
+}
+
+// record is an entity as an ECS keeps it in a column: its box first, its capability at 100,
+// 104 bytes in all.
+type record struct {
+	Box  plane.AABB
+	Vel  [4]float64
+	Kind uint32
+	Caps aabbworld.Capability
+}
+
+func recordBox(r *record) *plane.AABB            { return &r.Box }
+func recordCaps(r *record) *aabbworld.Capability { return &r.Caps }
+
+// entry is a way of handing a crowd to its space: as items, as runs over records, or as runs
+// over the first three quarters and items after them.
+type entry int
+
+const (
+	byItems entry = iota
+	byRuns
+	byRunsThenItems
+)
+
+var entries = []entry{byItems, byRuns, byRunsThenItems}
+
+func (e entry) String() string { return [...]string{"items", "runs", "runs+items"}[e] }
+
+// runsOf cuts records into runs of uneven lengths, an empty one among them, as the chunks of
+// several tables would be.
+func runsOf(ids []uid.UID64, records []record, runs []aabbworld.Run) []aabbworld.Run {
+	lengths := []int{1, 0, 7, 64, 33, 128}
+	for i, k := 0, 0; i < len(records); k++ {
+		n := min(lengths[k%len(lengths)], len(records)-i)
+		runs = append(runs, aabbworld.RunOf(ids[i:i+n], records[i:i+n], recordBox, recordCaps))
+		i += n
+	}
+	return runs
 }
 
 func newCrowd(t testing.TB, width, height uint32, edges aabbworld.Edges) *crowd {
@@ -50,7 +94,23 @@ func (c *crowd) add(x, y, w, h float64, caps aabbworld.Capability) {
 	c.items = append(c.items, aabbworld.Item{ID: uid.UID64(len(c.items)), Box: box, Caps: caps})
 }
 
-func (c *crowd) rebuild() { c.space.Rebuild(c.items) }
+func (c *crowd) rebuild() {
+	if c.entry == byItems {
+		c.space.Rebuild(c.items)
+		return
+	}
+	n := len(c.items)
+	if c.entry == byRunsThenItems {
+		n -= n / 4
+	}
+	c.records, c.ids = c.records[:0], c.ids[:0]
+	for _, it := range c.items[:n] {
+		c.records = append(c.records, record{Box: it.Box, Caps: it.Caps})
+		c.ids = append(c.ids, it.ID)
+	}
+	c.runs = runsOf(c.ids, c.records, c.runs[:0])
+	c.space.RebuildRuns(c.runs, c.items[n:])
+}
 
 // scatter fills the crowd with count boxes of the given sides, anywhere in the world.
 func (c *crowd) scatter(rng *rand.Rand, count int, sides []float64, whole bool) {
@@ -121,16 +181,29 @@ func TestBroadPhase_FindsExactlyWhoOverlaps(t *testing.T) {
 					c.scatter(rng, 400, sides, whole)
 
 					want := c.overlapping()
-					got := c.pairs()
-					for _, p := range got {
-						if p.a.Index() >= p.b.Index() {
-							t.Fatalf("edges=%04b %s whole=%v round %d: pair (%v, %v) is not lower index first", edges, name, whole, round, p.a, p.b)
+					var heard []idPair
+					for _, e := range entries {
+						c.entry = e
+						c.rebuild()
+						got := c.pairs()
+						at := fmt.Sprintf("edges=%04b %s whole=%v round %d %v",
+							edges, name, whole, round, e)
+						for _, p := range got {
+							if p.a.Index() >= p.b.Index() {
+								t.Fatalf("%s: pair (%v, %v) is not lower index first", at, p.a, p.b)
+							}
 						}
-					}
-					sortPairs(got)
-					if !slices.Equal(got, want) {
-						t.Fatalf("edges=%04b %s whole=%v round %d: Tick touched %d pairs, want %d\nmissing: %v\nextra:   %v",
-							edges, name, whole, round, len(got), len(want), missing(want, got), missing(got, want))
+						if e == byItems {
+							heard = slices.Clone(got)
+						} else if !slices.Equal(got, heard) {
+							t.Fatalf("%s: Tick touched %d pairs, through items %d, or others",
+								at, len(got), len(heard))
+						}
+						sortPairs(got)
+						if !slices.Equal(got, want) {
+							t.Fatalf("%s: Tick touched %d pairs, want %d\nmissing: %v\nextra:   %v",
+								at, len(got), len(want), missing(want, got), missing(got, want))
+						}
 					}
 				}
 			}
@@ -156,36 +229,44 @@ func missing(from, in []idPair) []idPair {
 }
 
 func TestBroadPhase_SaysTheSameThingTwice(t *testing.T) {
-	c := newCrowd(t, 1000, 800, aabbworld.Torus)
-	c.scatter(rand.New(rand.NewPCG(1, 2)), 500, []float64{2, 16, 100}, false)
+	for _, e := range entries {
+		c := newCrowd(t, 1000, 800, aabbworld.Torus)
+		c.entry = e
+		c.scatter(rand.New(rand.NewPCG(1, 2)), 500, []float64{2, 16, 100}, false)
 
-	first, second := c.pairs(), c.pairs()
-	if len(first) == 0 {
-		t.Fatal("a crowd this dense has to hold pairs")
-	}
-	if !slices.Equal(first, second) {
-		t.Error("two ticks over the same space named their pairs in a different order")
+		first, second := c.pairs(), c.pairs()
+		if len(first) == 0 {
+			t.Fatalf("%v: a crowd this dense has to hold pairs", e)
+		}
+		if !slices.Equal(first, second) {
+			t.Errorf("%v: two ticks over the same space named their pairs in a different order", e)
+		}
 	}
 }
 
 func TestBroadPhase_FollowsTheItemsItIsRebuiltFrom(t *testing.T) {
-	c := newCrowd(t, 1000, 800, 0)
-	c.add(100, 100, 10, 10, aabbworld.CanCollide)
-	c.add(300, 100, 10, 10, aabbworld.CanCollide)
-	c.rebuild()
-	if got := c.pairs(); len(got) != 0 {
-		t.Fatalf("two boxes 190 apart touch: %v", got)
-	}
+	for _, e := range entries {
+		c := newCrowd(t, 1000, 800, 0)
+		c.entry = e
+		for x := range 4 {
+			c.add(100+200*float64(x), 100, 10, 10, aabbworld.CanCollide)
+		}
+		c.rebuild()
+		if got := c.pairs(); len(got) != 0 {
+			t.Fatalf("%v: four boxes 190 apart touch: %v", e, got)
+		}
 
-	c.space.Move(&c.items[1].Box, geom.NewVec(-195, 0))
-	c.rebuild()
-	if got := c.pairs(); len(got) != 1 {
-		t.Errorf("after moving into overlap Tick touched %v, want the one pair", got)
-	}
+		c.space.Move(&c.items[1].Box, geom.NewVec(-195, 0))
+		c.space.Move(&c.items[3].Box, geom.NewVec(-195, 0))
+		c.rebuild()
+		if got := c.pairs(); len(got) != 2 {
+			t.Errorf("%v: after moving into overlap Tick touched %v, want the two pairs", e, got)
+		}
 
-	c.items = c.items[1:]
-	c.rebuild()
-	if got := c.pairs(); len(got) != 0 {
-		t.Errorf("an item left out of Rebuild is still paired: %v", got)
+		c.items = c.items[1:]
+		c.rebuild()
+		if got := c.pairs(); len(got) != 1 {
+			t.Errorf("%v: an item left out of Rebuild is still paired: %v", e, got)
+		}
 	}
 }

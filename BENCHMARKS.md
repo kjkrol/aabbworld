@@ -190,6 +190,27 @@ the new one alternately, on an idle machine.
 | `Wrap` a point: already inside / one step over / just below zero | 5.5 / 6.6 / 7.1 |
 | `Wrap` a point from far out (99,999) | 73 |
 
+## Records in columns — `Benchmark_Column_RebuildQueryTick`
+
+One tick of a space over 5,000 records of 104 bytes, as gram keeps `Base` in a goke column (the
+box at offset 0, the capability at 100), handed over two ways: **items** copies every record
+into an `Item` and writes the pushed boxes back from `Moved`, as gram did before v1.14.0;
+**runs** hands them over as `Run`s of 128 records, about a goke chunk, and the tick pushes them
+in place. Every tick moves each record, rebuilds, answers eight 100×100 queries and, but in the
+first scene, runs a collision tick that confirms every pair. Median of 6 at `88b8bfd`,
+2026-10-20, an idle machine.
+
+| Scene | items | runs |
+|:---|---:|---:|
+| 5,000 boxes 20×20, 30 apart on a 4000×4000 torus, all moving one way; no tick | 248 µs | 204 µs |
+| the same with a collision tick: every box paired with its neighbours, none touching | 1.29 ms | 1.24 ms |
+| 5,000 boxes 6×6 over a sixth of a 1024×1024 torus, each its own way; ~2,600 contacts a tick | 4.31 ms | 4.11 ms |
+
+Runs drop the copy and the id map, not the work: indexing reads the 104-byte records and writes
+48-byte cells (40 before, now with the id), and with contacts the solver dominates. The other
+benchmarks, through the old entry, are within 1–3% of v1.13.0 by their minima (a box read
+through the entry's pointer); their medians drift more under the machine's noise.
+
 ## Key takeaways
 
 * **`Rebuild` is lazy, and that is free.** It records the slice and the id map and leaves cell
