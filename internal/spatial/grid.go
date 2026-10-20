@@ -27,12 +27,11 @@ type Run struct {
 	CapsOff uintptr
 }
 
-// Entry is one item of the last Rebuild where it lies: its box and capability in the caller's
-// memory, and its id.
+// Entry is one item of the last Rebuild: its box where it lies, its id and its capability.
 type Entry struct {
 	Box  *plane.AABB
-	Caps *Capability
 	ID   uid.UID64
+	Caps Capability
 }
 
 // column is a Run, or the items of a Rebuild, as the grid walks it.
@@ -116,7 +115,7 @@ func NewGrid(surface *iplane.Surface, worldRes, cellRes Resolution) *Grid {
 func (g *Grid) Rebuild(items []Item) { g.RebuildRuns(nil, items) }
 
 // RebuildRuns is Rebuild over the records of runs and then items: the memory of both must hold
-// the same records in the same places until the next Rebuild.
+// the same records in the same places until the next Rebuild, and their capabilities with them.
 func (g *Grid) RebuildRuns(runs []Run, items []Item) {
 	clear(g.columns)
 	g.columns, g.count = g.columns[:0], 0
@@ -276,7 +275,7 @@ func (g *Grid) list() {
 	for ci := range g.columns {
 		c := &g.columns[ci]
 		for i := range c.n {
-			g.entries = append(g.entries, Entry{Box: c.box(i), Caps: c.caps(i), ID: c.idAt(i)})
+			g.entries = append(g.entries, Entry{Box: c.box(i), ID: c.idAt(i), Caps: *c.caps(i)})
 		}
 	}
 	if held > len(g.entries) {

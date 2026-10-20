@@ -70,8 +70,8 @@ func TestGrid_OverRunsAnswersAsOverItems(t *testing.T) {
 			}
 			for at, it := range sc.items {
 				e := entries[at]
-				if e.ID != it.ID || *e.Box != it.Box || *e.Caps != it.Caps {
-					t.Fatalf("entry %d is %v %v %v, want %v", at, e.ID, *e.Box, *e.Caps, it)
+				if e.ID != it.ID || *e.Box != it.Box || e.Caps != it.Caps {
+					t.Fatalf("entry %d is %v %v %v, want %v", at, e.ID, *e.Box, e.Caps, it)
 				}
 				if box, ok := byRuns.EntryAABB(it.ID); !ok || box != sc.mustEntryAABB(t, it.ID) {
 					t.Fatalf("EntryAABB(%v) over runs = %v/%v", it.ID, box, ok)

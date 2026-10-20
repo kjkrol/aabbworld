@@ -84,7 +84,7 @@ func (e *Engine) add(a, b int32) {
 	if e.items[a].ID.Index() > e.items[b].ID.Index() {
 		a, b = b, a
 	}
-	e.solver.Add(Pair{A: a, B: b, Flags: flagsOf(*e.items[a].Caps, *e.items[b].Caps)})
+	e.solver.Add(Pair{A: a, B: b, Flags: flagsOf(e.items[a].Caps, e.items[b].Caps)})
 }
 
 func (e *Engine) ask(i int, pen geom.Vec) (geom.Vec, bool) {

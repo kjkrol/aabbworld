@@ -2,6 +2,7 @@ package collide
 
 import (
 	"math"
+	"slices"
 
 	"github.com/kjkrol/aabbworld/geom"
 	iplane "github.com/kjkrol/aabbworld/internal/plane"
@@ -37,6 +38,7 @@ type Touch func(i int, pen geom.Vec) (geom.Vec, bool)
 type Solver struct {
 	pairs  []Pair
 	states []state
+	boxes  [][2]*plane.AABB // each pair's two boxes, where they lie
 
 	// clock counts measurements; movedAt is its reading when each item was last pushed.
 	clock   uint32
@@ -98,6 +100,11 @@ func (s *Solver) Solve(
 	touch Touch, onContact func(i int, pen geom.Vec), field *Field,
 ) {
 	pairs, states, movedAt := s.pairs, s.states[:len(s.pairs)], s.movedAt
+	s.boxes = slices.Grow(s.boxes[:0], len(pairs))[:len(pairs)]
+	boxes := s.boxes
+	for i := range pairs {
+		boxes[i] = [2]*plane.AABB{items[pairs[i].A].Box, items[pairs[i].B].Box}
+	}
 	for range iterations {
 		moved := false
 		for i := range pairs {
@@ -110,7 +117,7 @@ func (s *Solver) Solve(
 			s.clock++
 			st.testedAt = s.clock
 
-			a, b := items[p.A].Box, items[p.B].Box
+			a, b := boxes[i][0], boxes[i][1]
 			pen, ok := penetration(a, b)
 			if !ok {
 				continue
@@ -177,7 +184,7 @@ func (s *Solver) pushOutOfGround(
 		}
 		s.clock++
 		s.fieldAt[i] = s.clock
-		p.item, p.it, p.sensor, p.pushed = int32(i), it, *it.Caps&spatial.Sensor != 0, false
+		p.item, p.it, p.sensor, p.pushed = int32(i), it, it.Caps&spatial.Sensor != 0, false
 		box := geom.AABB{TopLeft: it.Box.TopLeft, BottomRight: it.Box.TopLeft.Add(it.Box.Size)}
 		field.Solid.Solid(it.ID, box, p.visit)
 		if field.Walls != nil {

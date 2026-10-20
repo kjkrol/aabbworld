@@ -16,8 +16,8 @@
 // more. The cells are built at the first [Grid.Query] after it, from the boxes as they are then.
 // The records must stay put until the next Rebuild, but their boxes may move; [Grid.Invalidate]
 // says they have, so the next Query rebuilds the cells. [Grid.Items] lists each position as an
-// [Entry], pointers to its box and capability, at the first call after a Rebuild; [Grid.Item] and
-// [Grid.EntryAABB] answer by id from it, mapping the ids at the first call too.
+// [Entry] — a pointer to its box, its id and its capability — at the first call after a Rebuild;
+// [Grid.Item] and [Grid.EntryAABB] answer by id from it, mapping the ids at the first call too.
 //
 // [Grid.Pairs] finds every two items sharing a capability whose boxes, grown by a reach of their
 // shorter side, touch. It does not read the cells: it sweeps its own counting-sorted layout of the

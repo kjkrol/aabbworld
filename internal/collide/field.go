@@ -183,5 +183,5 @@ func pushOut(a, b geom.AABB, open pcollide.Sides) geom.Vec {
 
 // movable reports whether an item takes part in collisions and something may shift it.
 func movable(it *spatial.Entry) bool {
-	return *it.Caps&spatial.CanCollide != 0 && *it.Caps&spatial.Static == 0
+	return it.Caps&spatial.CanCollide != 0 && it.Caps&spatial.Static == 0
 }

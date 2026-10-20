@@ -93,7 +93,7 @@ func newCrowd(rng *rand.Rand, surface *iplane.Surface, count int, field float64)
 func entries(items []spatial.Item) []spatial.Entry {
 	es := make([]spatial.Entry, len(items))
 	for i := range items {
-		es[i] = spatial.Entry{Box: &items[i].Box, Caps: &items[i].Caps, ID: items[i].ID}
+		es[i] = spatial.Entry{Box: &items[i].Box, ID: items[i].ID, Caps: items[i].Caps}
 	}
 	return es
 }

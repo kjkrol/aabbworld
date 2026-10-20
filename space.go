@@ -128,10 +128,11 @@ func NewSpace(cfg Config) (*Space, error) {
 func (s *Space) Rebuild(items []Item) { s.RebuildRuns(nil, items) }
 
 // RebuildRuns is Rebuild over the boxes of runs and then of items, read where they lie: Query and
-// Scan see them as they are, and a Tick pushes them in place. Until the last Query, Scan or Tick
-// before the next Rebuild, the memory under both must hold the same records in the same places; a
-// caller that moves records, as an ECS does when entities migrate (in goke, once any table's
-// ChunkSnapshot.TableVer changed), gathers its runs again and rebuilds.
+// Scan see them as they are, and a Tick pushes them in place; a box may move between Rebuilds, a
+// Capability may not. Until the last Query, Scan or Tick before the next Rebuild, the memory under
+// both must hold the same records in the same places; a caller that moves records, as an ECS does
+// when entities migrate (in goke, once any table's ChunkSnapshot.TableVer changed), gathers its
+// runs again and rebuilds.
 func (s *Space) RebuildRuns(runs []Run, items []Item) {
 	s.grid.RebuildRuns(
 		unsafe.Slice((*spatial.Run)(unsafe.Pointer(unsafe.SliceData(runs))), len(runs)),
