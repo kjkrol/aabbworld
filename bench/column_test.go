@@ -131,14 +131,19 @@ func (h *inPlace) Moved(uid.UID64, plane.AABB)                         {}
 
 // Benchmark_Column_RebuildQueryTick is one tick of a space over records in a column of 104-byte
 // structs, as gram's are: every record moves, then Rebuild, eight 100x100 queries and a collision
-// tick confirming every pair. items copies the records into Items and writes the pushed boxes back
-// from Moved, as gram does today; runs hands the records over as runs of a chunk each, and the
-// tick pushes them in place.
+// tick confirming every pair — no tick in the spread scene without one, gram's world alone. items
+// copies the records into Items and writes the pushed boxes back from Moved, as gram does before
+// runs; runs hands the records over as runs of a chunk each, and the tick pushes them in place.
 func Benchmark_Column_RebuildQueryTick(b *testing.B) {
 	for _, scene := range []struct {
 		name  string
 		build func(*testing.B) *columnScene
-	}{{"spread,n=5000", spreadScene}, {"crowd,n=5000", crowdScene}} {
+		tick  bool
+	}{
+		{"spread,n=5000,no-tick", spreadScene, false},
+		{"spread,n=5000", spreadScene, true},
+		{"crowd,n=5000", crowdScene, true},
+	} {
 		b.Run(scene.name+"/items", func(b *testing.B) {
 			sc := scene.build(b)
 			h := &writeBack{records: sc.records}
@@ -154,7 +159,9 @@ func Benchmark_Column_RebuildQueryTick(b *testing.B) {
 				}
 				sc.space.Rebuild(items)
 				sc.query()
-				engine.Tick()
+				if scene.tick {
+					engine.Tick()
+				}
 			}
 			b.ReportMetric(float64(h.contacts)/float64(b.N), "contacts/tick")
 		})
@@ -174,7 +181,9 @@ func Benchmark_Column_RebuildQueryTick(b *testing.B) {
 				}
 				sc.space.RebuildRuns(runs, nil)
 				sc.query()
-				engine.Tick()
+				if scene.tick {
+					engine.Tick()
+				}
 			}
 			b.ReportMetric(float64(h.contacts)/float64(b.N), "contacts/tick")
 		})
