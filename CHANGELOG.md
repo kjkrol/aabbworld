@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.14.0 — 2026-10-20
+
+**Index**
+- `Space.RebuildRuns(runs []Run, items []Item)` reads the boxes where they lie in the caller's own
+  columns, without a copy. A `Run{IDs, Base, Stride, BoxOff, CapsOff}` is a column of records:
+  record i at `Base + i·Stride`, its `plane.AABB` at `BoxOff`, its `Capability` at `CapsOff`,
+  named by `IDs[i]`; `RunOf(ids, rows, box, caps)` works the offsets out from a slice of rows.
+  The items follow the runs, at the positions after theirs. `Query` and `Scan` read the boxes as
+  they are and `collide.Engine.Tick` pushes them in place, so `Moved` and `Left` tell of boxes
+  already written. Until the last `Query`, `Scan` or `Tick` before the next Rebuild the memory
+  under the runs must hold the same records in the same places: a caller that moves records (an
+  ECS migrating entities; goke once a table's `ChunkSnapshot.TableVer` changed) gathers its runs
+  again. A box may move between Rebuilds, a capability may not. `Rebuild(items)` is
+  `RebuildRuns(nil, items)`.
+- What the broad phase returns is unchanged: the broad-phase tests pair the same boxes in the
+  same order through items, runs, and runs followed by items, and Query and Scan answer alike.
+- A Rebuild no longer maps ids to positions; the first `Scan` after it does.
+- Over 5,000 records of 104 bytes, as gram keeps them, a rebuild and eight queries cost 18% less
+  through runs than through copied Items (248 → 204 µs); with a collision tick 4–5% less, the
+  solver's work unchanged. The old entry costs 1–3% more than in v1.13.0 (a box read through the
+  entry's pointer). See
+  [BENCHMARKS.md](BENCHMARKS.md#records-in-columns--benchmark_column_rebuildquerytick).
+
 ## v1.13.0 — 2026-10-19
 
 **Plane**

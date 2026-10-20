@@ -34,8 +34,9 @@ aabbworld is the geometry and the per-tick questions of a simulation, with no op
 the simulation stores its entities. It is built around a few principles:
 
 - **The world is a slice.** A `Space` is told its items as `[]Item` — whose box, where it lies,
-  what may be done with it — and answers questions about them. It fits under any entity system,
-  or none.
+  what may be done with it — or as runs over the caller's own columns (`RebuildRuns`), read and
+  pushed where they lie, and answers questions about them. It fits under any entity system, or
+  none.
 - **No hidden costs.** `Rebuild` records the slice and defers indexing to the first query that
   needs it; several rebuilds in a tick cost one indexing. Boxes are read as they are now, so a
   collision tick needs no second rebuild for queries to see its pushes.
@@ -150,8 +151,9 @@ in the top-left quarter: [1 2]
 ## Tick lifecycle
 
 1. **Move** the boxes with `Space.Move` (or `MoveTo`); the edge rules are applied to each.
-2. **Rebuild** with the items as they now stand. This is the one stamp a `Space` needs: it records
-   the slice and which id sits where, and indexes lazily.
+2. **Rebuild** with the items as they now stand, or **RebuildRuns** with runs over the caller's
+   columns. This is the one stamp a `Space` needs: it records the slice, or the runs, and indexes
+   lazily.
 3. **Tick** the engine. Every two `CanCollide` boxes within `Reach` of each other are paired; each
    overlapping pair is put to `Handler.Touch`, which may confirm it, refine the penetration, or veto
    it; confirmed pairs are separated over up to `Iterations` passes and reported by `Contact`; every
@@ -160,7 +162,8 @@ in the top-left quarter: [1 2]
 4. **Ask.** `Query` and `Scan` see the pushed boxes as they are now.
 
 Items must stay put between rebuilds — their boxes may move, but the slice may not grow, shrink or
-reorder without a `Rebuild`.
+reorder without a `Rebuild`; the records under runs likewise, and their capabilities may not
+change.
 
 <a id="edges"></a>
 # Edges
