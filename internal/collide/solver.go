@@ -93,7 +93,10 @@ func (s *Solver) Pair(i int) *Pair { return &s.pairs[i] }
 
 // Solve reports each overlapping pair once and pushes it apart, and every movable item out of the
 // field's solid ground when there is one, in up to iterations passes.
-func (s *Solver) Solve(items []spatial.Item, surface *iplane.Surface, iterations int, touch Touch, onContact func(i int, pen geom.Vec), field *Field) {
+func (s *Solver) Solve(
+	items []spatial.Entry, surface *iplane.Surface, iterations int,
+	touch Touch, onContact func(i int, pen geom.Vec), field *Field,
+) {
 	pairs, states, movedAt := s.pairs, s.states[:len(s.pairs)], s.movedAt
 	for range iterations {
 		moved := false
@@ -107,7 +110,7 @@ func (s *Solver) Solve(items []spatial.Item, surface *iplane.Surface, iterations
 			s.clock++
 			st.testedAt = s.clock
 
-			a, b := &items[p.A].Box, &items[p.B].Box
+			a, b := items[p.A].Box, items[p.B].Box
 			pen, ok := penetration(a, b)
 			if !ok {
 				continue
@@ -157,7 +160,9 @@ func (s *Solver) Solve(items []spatial.Item, surface *iplane.Surface, iterations
 
 // pushOutOfGround pushes every movable item that moved since it last met the ground out of it, and
 // reports whether any was pushed.
-func (s *Solver) pushOutOfGround(items []spatial.Item, surface *iplane.Surface, field *Field) bool {
+func (s *Solver) pushOutOfGround(
+	items []spatial.Entry, surface *iplane.Surface, field *Field,
+) bool {
 	s.readyField()
 	p := &s.field
 	if p.visit == nil {
@@ -172,7 +177,7 @@ func (s *Solver) pushOutOfGround(items []spatial.Item, surface *iplane.Surface, 
 		}
 		s.clock++
 		s.fieldAt[i] = s.clock
-		p.item, p.it, p.sensor, p.pushed = int32(i), it, it.Caps&spatial.Sensor != 0, false
+		p.item, p.it, p.sensor, p.pushed = int32(i), it, *it.Caps&spatial.Sensor != 0, false
 		box := geom.AABB{TopLeft: it.Box.TopLeft, BottomRight: it.Box.TopLeft.Add(it.Box.Size)}
 		field.Solid.Solid(it.ID, box, p.visit)
 		if field.Walls != nil {

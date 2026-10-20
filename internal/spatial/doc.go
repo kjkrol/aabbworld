@@ -1,19 +1,23 @@
 // Package spatial is the index behind a Space: a cell grid over a slice of items, answering range
 // queries and finding every two items close enough to matter.
 //
-// # Item and Capability
+// # Item, Run and Capability
 //
 // An [Item] is what the grid is told of: an entity id, its box as the plane holds it, and its
 // [Capability], a set of bits a query matches against — any shared bit is a match, [AnyCapability]
-// matches all. The public aabbworld.Item and aabbworld.Capability have this exact layout.
+// matches all. A [Run] is many of them in the caller's own records: ids beside a column of records
+// of one stride, with the box and the capability at offsets in each. The public aabbworld.Item,
+// aabbworld.Run and aabbworld.Capability have this exact layout.
 //
 // # Grid
 //
-// A [Grid] is told the world by [Grid.Rebuild], which records the slice and which id sits where and
-// nothing more; the cells are built at the first [Grid.Query] after it, from the boxes as they are
-// then. The items must stay put until the next Rebuild, but their boxes may move; [Grid.Invalidate]
-// says they have, so the next Query rebuilds the cells. [Grid.Item] and [Grid.EntryAABB] answer by
-// id from the slice directly.
+// A [Grid] is told the world by [Grid.RebuildRuns] — runs, then items, at positions counted on
+// across them — or [Grid.Rebuild], items alone; either records where the records lie and nothing
+// more. The cells are built at the first [Grid.Query] after it, from the boxes as they are then.
+// The records must stay put until the next Rebuild, but their boxes may move; [Grid.Invalidate]
+// says they have, so the next Query rebuilds the cells. [Grid.Items] lists each position as an
+// [Entry], pointers to its box and capability, at the first call after a Rebuild; [Grid.Item] and
+// [Grid.EntryAABB] answer by id from it, mapping the ids at the first call too.
 //
 // [Grid.Pairs] finds every two items sharing a capability whose boxes, grown by a reach of their
 // shorter side, touch. It does not read the cells: it sweeps its own counting-sorted layout of the

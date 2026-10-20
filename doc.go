@@ -17,9 +17,15 @@
 //
 // The items are a snapshot the caller owns. A Space keeps the slice it was last handed and reads
 // the boxes in it as they are now, so the caller may move them between Rebuilds; what it may not do
-// is add, drop or reorder items without a Rebuild. Rebuild itself is cheap: it records the slice and
-// which id sits where, and leaves indexing to the first query that needs it, so several Rebuilds in a
-// tick cost one indexing.
+// is add, drop or reorder items without a Rebuild. Rebuild itself is cheap: it records the slice,
+// and leaves indexing to the first query that needs it, so several Rebuilds in a tick cost one
+// indexing.
+//
+// A caller that keeps its entities in columns of its own hands them over without copying, by
+// [Space.RebuildRuns]: a [Run] is the ids of a column and where in each of its records lie the box
+// and the [Capability] ([RunOf] works the offsets out from a slice of rows). The Space reads the
+// boxes where they lie and a collision engine pushes them there, so the column is the only copy;
+// the records must not move between slots until the last question before the next Rebuild.
 //
 // # Edges
 //
@@ -46,7 +52,7 @@
 // One tick of a simulation reads:
 //
 //  1. Move the boxes: [Space.Move] on each, under the edge rules.
-//  2. [Space.Rebuild] with the items as they now stand.
+//  2. [Space.Rebuild] with the items as they now stand, or [Space.RebuildRuns] with the runs.
 //  3. [collide.Engine.Tick] on the engine built by [Space.CollideEngine]: every two CanCollide boxes
 //     within reach of each other are paired, each overlapping pair is put to the handler's Touch,
 //     confirmed pairs are separated over a few passes and reported by Contact, and every box that

@@ -52,7 +52,16 @@ func (b *batch) pair(i, j int, flags uint8) int {
 }
 
 func (b *batch) solve(surface *iplane.Surface, onContact func(i int, pen geom.Vec)) {
-	b.s.Solve(b.items, surface, iterations, nil, onContact, nil)
+	b.s.Solve(entries(b.items), surface, iterations, nil, onContact, nil)
+}
+
+// entries are items where they lie, as a grid lists them.
+func entries(items []spatial.Item) []spatial.Entry {
+	es := make([]spatial.Entry, len(items))
+	for i := range items {
+		es[i] = spatial.Entry{Box: &items[i].Box, Caps: &items[i].Caps, ID: items[i].ID}
+	}
+	return es
 }
 
 func (b *batch) box(i int) plane.AABB { return b.items[i].Box }

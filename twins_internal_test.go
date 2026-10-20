@@ -40,3 +40,22 @@ func TestItem_MatchesItsInternalTwinFieldForField(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_MatchesItsInternalTwinFieldForField(t *testing.T) {
+	var run Run
+	var irun spatial.Run
+	if unsafe.Sizeof(run) != unsafe.Sizeof(irun) {
+		t.Fatalf("sizes differ: Run %d vs %d", unsafe.Sizeof(run), unsafe.Sizeof(irun))
+	}
+	for name, offsets := range map[string][2]uintptr{
+		"Run.IDs":     {unsafe.Offsetof(run.IDs), unsafe.Offsetof(irun.IDs)},
+		"Run.Base":    {unsafe.Offsetof(run.Base), unsafe.Offsetof(irun.Base)},
+		"Run.Stride":  {unsafe.Offsetof(run.Stride), unsafe.Offsetof(irun.Stride)},
+		"Run.BoxOff":  {unsafe.Offsetof(run.BoxOff), unsafe.Offsetof(irun.BoxOff)},
+		"Run.CapsOff": {unsafe.Offsetof(run.CapsOff), unsafe.Offsetof(irun.CapsOff)},
+	} {
+		if offsets[0] != offsets[1] {
+			t.Errorf("%s sits at %d here and %d in the internal twin", name, offsets[0], offsets[1])
+		}
+	}
+}

@@ -1,6 +1,9 @@
 package spatial
 
 import (
+	"slices"
+	"unsafe"
+
 	"github.com/kjkrol/aabbworld/geom"
 	iplane "github.com/kjkrol/aabbworld/internal/plane"
 	"github.com/kjkrol/aabbworld/plane"
@@ -14,18 +17,61 @@ type Item struct {
 	Caps Capability
 }
 
-// Grid is a cell grid over the items of its last Rebuild. Pair sweeps read the items as they are;
-// the cells are built from them at the first Query after a Rebuild or an Invalidate.
+// Run is a column of records in memory the caller owns: record i starts i·Stride bytes past
+// Base, with its box at BoxOff and its Capability at CapsOff, and IDs[i] names it.
+type Run struct {
+	IDs     []uid.UID64
+	Base    unsafe.Pointer
+	Stride  uintptr
+	BoxOff  uintptr
+	CapsOff uintptr
+}
+
+// Entry is one item of the last Rebuild where it lies: its box and capability in the caller's
+// memory, and its id.
+type Entry struct {
+	Box  *plane.AABB
+	Caps *Capability
+	ID   uid.UID64
+}
+
+// column is a Run, or the items of a Rebuild, as the grid walks it.
+type column struct {
+	rec, id          unsafe.Pointer // the first record, its id
+	stride, idStride uintptr
+	boxOff, capsOff  uintptr
+	n                int
+}
+
+func (c *column) box(i int) *plane.AABB {
+	return (*plane.AABB)(unsafe.Add(c.rec, uintptr(i)*c.stride+c.boxOff))
+}
+
+func (c *column) caps(i int) *Capability {
+	return (*Capability)(unsafe.Add(c.rec, uintptr(i)*c.stride+c.capsOff))
+}
+
+func (c *column) idAt(i int) uid.UID64 {
+	return *(*uid.UID64)(unsafe.Add(c.id, uintptr(i)*c.idStride))
+}
+
+// Grid is a cell grid over the records of its last Rebuild, positioned in order across its runs
+// and then its items. Pair sweeps read the records as they are; the cells are built from them at
+// the first Query after a Rebuild or an Invalidate.
 type Grid struct {
 	surface  *iplane.Surface
 	cellRes  Resolution
 	side     uint32
 	maxCoord uint32
 
-	items    []Item
+	columns  []column
+	count    int
 	rebuilds uint32
+	entries  []Entry
+	listed   uint32 // the Rebuild entries were listed for
 	slotOf   []int32
 	stamps   []uint32
+	mapped   uint32 // the Rebuild slotOf was filled for
 	stale    bool
 
 	pieces []gridPiece
@@ -34,8 +80,9 @@ type Grid struct {
 	cells  []gridCell
 	sweep  pairSweep
 
-	listing int32
-	onImage plane.FragVisitor
+	listingID   uid.UID64
+	listingCaps Capability
+	onImage     plane.FragVisitor
 }
 
 // gridPiece is one image of an item as the grid holds it, and the cells it covers.
@@ -46,7 +93,7 @@ type gridPiece struct {
 
 type gridCell struct {
 	box  geom.AABB
-	at   int32
+	id   uid.UID64
 	caps Capability
 }
 
@@ -66,22 +113,45 @@ func NewGrid(surface *iplane.Surface, worldRes, cellRes Resolution) *Grid {
 // Rebuild replaces what the grid holds with items, which must stay put until the next Rebuild.
 // Their boxes may change in the meantime; Invalidate tells the grid so. The cells are built at
 // the first Query that needs them, so several Rebuilds in a row cost one indexing.
-func (g *Grid) Rebuild(items []Item) {
-	g.items = items
-	g.rebuilds++
-	for i := range items {
-		g.remember(items[i].ID, int32(i))
+func (g *Grid) Rebuild(items []Item) { g.RebuildRuns(nil, items) }
+
+// RebuildRuns is Rebuild over the records of runs and then items: the memory of both must hold
+// the same records in the same places until the next Rebuild.
+func (g *Grid) RebuildRuns(runs []Run, items []Item) {
+	clear(g.columns)
+	g.columns, g.count = g.columns[:0], 0
+	for i := range runs {
+		r := &runs[i]
+		if len(r.IDs) == 0 {
+			continue
+		}
+		g.columns = append(g.columns, column{
+			rec: r.Base, id: unsafe.Pointer(unsafe.SliceData(r.IDs)),
+			stride: r.Stride, idStride: unsafe.Sizeof(uid.UID64(0)),
+			boxOff: r.BoxOff, capsOff: r.CapsOff, n: len(r.IDs),
+		})
+		g.count += len(r.IDs)
 	}
+	if len(items) > 0 {
+		var it Item
+		first := unsafe.Pointer(unsafe.SliceData(items))
+		g.columns = append(g.columns, column{
+			rec: first, id: unsafe.Add(first, unsafe.Offsetof(it.ID)),
+			stride: unsafe.Sizeof(it), idStride: unsafe.Sizeof(it),
+			boxOff: unsafe.Offsetof(it.Box), capsOff: unsafe.Offsetof(it.Caps), n: len(items),
+		})
+		g.count += len(items)
+	}
+	g.rebuilds++
 	g.stale = true
 }
 
 // Invalidate marks the cells as behind the boxes of the items, which have moved since they were built.
 func (g *Grid) Invalidate() { g.stale = true }
 
-// index builds the cells from the items as they are now.
+// index builds the cells from the records as they are now.
 func (g *Grid) index() {
 	g.stale = false
-	items := g.items
 	g.pieces = g.pieces[:0]
 	cells := int(g.side) * int(g.side)
 	if cap(g.starts) < cells+1 {
@@ -92,14 +162,17 @@ func (g *Grid) index() {
 	g.cursor = g.cursor[:cells]
 	clear(g.starts)
 
-	for i := range items {
-		e := &items[i]
-		if main, ok := g.clamp(e.Box.AABB); ok {
-			g.add(main, int32(i), e.Caps)
-		}
-		if e.Box.Overhang != (geom.Vec{}) {
-			g.listing = int32(i)
-			e.Box.VisitFragments(g.onImage)
+	for ci := range g.columns {
+		c := &g.columns[ci]
+		for i := range c.n {
+			box, caps, id := c.box(i), *c.caps(i), c.idAt(i)
+			if main, ok := g.clamp(box.AABB); ok {
+				g.add(main, id, caps)
+			}
+			if box.Overhang != (geom.Vec{}) {
+				g.listingID, g.listingCaps = id, caps
+				box.VisitFragments(g.onImage)
+			}
 		}
 	}
 
@@ -126,14 +199,14 @@ func (g *Grid) index() {
 
 func (g *Grid) addImage(_ plane.FragPosition, image geom.AABB) bool {
 	if frag, ok := g.clamp(image); ok {
-		g.add(frag, g.listing, g.items[g.listing].Caps)
+		g.add(frag, g.listingID, g.listingCaps)
 	}
 	return true
 }
 
-func (g *Grid) add(box geom.AABB, at int32, caps Capability) {
+func (g *Grid) add(box geom.AABB, id uid.UID64, caps Capability) {
 	p := gridPiece{
-		gridCell: gridCell{box: box, at: at, caps: caps},
+		gridCell: gridCell{box: box, id: id, caps: caps},
 		x1:       g.cellOf(box.TopLeft.X), y1: g.cellOf(box.TopLeft.Y),
 		x2: g.cellOf(box.BottomRight.X), y2: g.cellOf(box.BottomRight.Y),
 	}
@@ -145,7 +218,15 @@ func (g *Grid) add(box geom.AABB, at int32, caps Capability) {
 	g.pieces = append(g.pieces, p)
 }
 
-// remember maps the entity id names to its item for this Rebuild.
+// mapIDs notes the position of every id of the last Rebuild.
+func (g *Grid) mapIDs() {
+	g.mapped = g.rebuilds
+	for at, e := range g.Items() {
+		g.remember(e.ID, int32(at))
+	}
+}
+
+// remember maps the entity id names to its position for this Rebuild.
 func (g *Grid) remember(id uid.UID64, at int32) {
 	i := int(id.Index())
 	for i >= len(g.slotOf) {
@@ -156,12 +237,15 @@ func (g *Grid) remember(id uid.UID64, at int32) {
 }
 
 // Item is the item the entity id names, if the last Rebuild was told of it.
-func (g *Grid) Item(id uid.UID64) (*Item, bool) {
+func (g *Grid) Item(id uid.UID64) (*Entry, bool) {
+	if g.mapped != g.rebuilds {
+		g.mapIDs()
+	}
 	i := int(id.Index())
 	if i >= len(g.slotOf) || g.stamps[i] != g.rebuilds {
 		return nil, false
 	}
-	e := &g.items[g.slotOf[i]]
+	e := &g.entries[g.slotOf[i]]
 	if e.ID != id {
 		return nil, false
 	}
@@ -177,8 +261,28 @@ func (g *Grid) EntryAABB(id uid.UID64) (geom.AABB, bool) {
 	return g.clamp(e.Box.AABB)
 }
 
-// Items is what the last Rebuild was told of, in order.
-func (g *Grid) Items() []Item { return g.items }
+// Items is what the last Rebuild was told of, by position.
+func (g *Grid) Items() []Entry {
+	if g.listed != g.rebuilds {
+		g.list()
+	}
+	return g.entries
+}
+
+func (g *Grid) list() {
+	g.listed = g.rebuilds
+	held := len(g.entries)
+	g.entries = slices.Grow(g.entries[:0], g.count)
+	for ci := range g.columns {
+		c := &g.columns[ci]
+		for i := range c.n {
+			g.entries = append(g.entries, Entry{Box: c.box(i), Caps: c.caps(i), ID: c.idAt(i)})
+		}
+	}
+	if held > len(g.entries) {
+		clear(g.entries[len(g.entries):held])
+	}
+}
 
 // Query calls fn for every piece sharing want that intersects box, each once, and returns how many.
 // It reads the boxes as they are now, building the cells first if they are behind.
@@ -203,7 +307,7 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 				if max(g.cellOf(c.box.TopLeft.X), x1) != x || max(g.cellOf(c.box.TopLeft.Y), y1) != y {
 					continue
 				}
-				fn(g.items[c.at].ID)
+				fn(c.id)
 				found++
 			}
 		}
@@ -216,7 +320,7 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 func (g *Grid) Pairs(reach float64, want Capability, fn func(a, b int32)) {
 	s := &g.sweep
 	s.shift, s.side = g.cellRes, g.side
-	s.listItems(g.surface, g.items, reach, want)
+	s.listItems(g.surface, g.columns, reach, want)
 	s.sort()
 	s.visit(fn)
 	s.flushSeam(fn)

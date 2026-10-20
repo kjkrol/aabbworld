@@ -53,6 +53,7 @@ func Benchmark_Solver_Field(b *testing.B) {
 	surface := iplane.NewEuclidean2D(2000, 2000)
 
 	items := make([]spatial.Item, len(batch.home))
+	in := entries(items)
 	var s collide.Solver
 	b.ReportAllocs()
 	for b.Loop() {
@@ -63,9 +64,18 @@ func Benchmark_Solver_Field(b *testing.B) {
 		for _, p := range batch.pairs {
 			s.Add(collide.Pair{A: int32(p[0]), B: int32(p[1])})
 		}
-		s.Solve(items, surface, solverIterations, nil, nil, nil)
+		s.Solve(in, surface, solverIterations, nil, nil, nil)
 	}
 	b.ReportMetric(float64(len(batch.pairs)), "pairs")
+}
+
+// entries are items where they lie, as a grid lists them.
+func entries(items []spatial.Item) []spatial.Entry {
+	es := make([]spatial.Entry, len(items))
+	for i := range items {
+		es[i] = spatial.Entry{Box: &items[i].Box, Caps: &items[i].Caps, ID: items[i].ID}
+	}
+	return es
 }
 
 // denseScene is the collision demo's shape: 5x5 boxes over a fifth of a torus, paired by the grid.
@@ -96,6 +106,7 @@ func newDenseScene(n int) *denseScene {
 func Benchmark_Solver_Dense(b *testing.B) {
 	sc := newDenseScene(8388)
 	items := make([]spatial.Item, len(sc.home))
+	in := entries(items)
 	var s collide.Solver
 	contacts := 0
 	onContact := func(int, geom.Vec) { contacts++ }
@@ -107,7 +118,7 @@ func Benchmark_Solver_Dense(b *testing.B) {
 			s.Add(p)
 		}
 		contacts = 0
-		s.Solve(items, sc.surface, solverIterations, nil, onContact, nil)
+		s.Solve(in, sc.surface, solverIterations, nil, onContact, nil)
 	}
 	b.ReportMetric(float64(len(sc.pairs)), "pairs")
 	b.ReportMetric(float64(contacts), "contacts")

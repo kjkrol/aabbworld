@@ -42,24 +42,30 @@ type sweepEntry struct {
 
 type seamPair struct{ a, b int32 }
 
-// listItems gathers every matching item's grown images, and counts them into their cells.
-func (s *pairSweep) listItems(surface *iplane.Surface, entries []Item, reach float64, want Capability) {
+// listItems gathers every matching record's grown images, and counts them into their cells.
+func (s *pairSweep) listItems(
+	surface *iplane.Surface, columns []column, reach float64, want Capability,
+) {
 	s.begin()
-	for i := range entries {
-		e := &entries[i]
-		if !e.Caps.matches(want) {
-			continue
-		}
-		size := e.Box.Size
-		s.whole = e.Box
-		surface.Expand(&s.whole, reach*min(size.X, size.Y))
+	first := int32(0)
+	for ci := range columns {
+		c := &columns[ci]
+		for i := range c.n {
+			if !c.caps(i).matches(want) {
+				continue
+			}
+			at, box := first+int32(i), c.box(i)
+			s.whole = *box
+			surface.Expand(&s.whole, reach*min(box.Size.X, box.Size.Y))
 
-		multi := s.whole.Overhang != (geom.Vec{})
-		s.add(s.whole.AABB, int32(i), multi)
-		if multi {
-			s.listing = int32(i)
-			s.whole.VisitFragments(s.onImage)
+			multi := s.whole.Overhang != (geom.Vec{})
+			s.add(s.whole.AABB, at, multi)
+			if multi {
+				s.listing = at
+				s.whole.VisitFragments(s.onImage)
+			}
 		}
+		first += int32(c.n)
 	}
 }
 
