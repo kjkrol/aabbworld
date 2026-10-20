@@ -275,3 +275,92 @@ func TestScan_AfterAQueryGoroutinesScanAtOnce(t *testing.T) {
 		wg.Wait()
 	}
 }
+
+func TestMoveRun_MovesEveryBoxAsMoveDoesButTheStill(t *testing.T) {
+	rng := rand.New(rand.NewPCG(4, 12))
+	deltas := []func() geom.Vec{
+		func() geom.Vec { return geom.Vec{} },
+		func() geom.Vec { return geom.NewVec(rng.Float64()*4-2, rng.Float64()*4-2) },
+		func() geom.Vec { return geom.NewVec(rng.Float64()*600-300, rng.Float64()*600-300) },
+		func() geom.Vec { return geom.NewVec(1e-12, 0) },
+		func() geom.Vec { return geom.NewVec(0, -rng.Float64()) },
+	}
+	for _, edges := range []aabbworld.Edges{
+		0, aabbworld.Torus, aabbworld.WrapX, aabbworld.OpenY, aabbworld.OpenX | aabbworld.OpenY,
+		aabbworld.WrapX | aabbworld.OpenY,
+	} {
+		space, err := aabbworld.NewSpace(aabbworld.Config{
+			Width: 100, Height: 80, Edges: edges, BucketSize: 16,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var records []record
+		var ids []uid.UID64
+		var by []geom.Vec
+		for i := range 2000 {
+			r := untouched
+			side := []float64{0.5, 3, 20, 130}[rng.IntN(4)]
+			at := geom.NewVec(rng.Float64()*400-150, rng.Float64()*400-150)
+			r.Box, r.Caps = plane.NewAABB(at, side, side*(0.5+rng.Float64())), aabbworld.CanCollide
+			space.Place(&r.Box)
+			records, ids = append(records, r), append(ids, uid.UID64(i+1))
+			by = append(by, deltas[rng.IntN(len(deltas))]())
+		}
+		want := slices.Clone(records)
+		var gone []uid.UID64
+		for i := range want {
+			if by[i] != (geom.Vec{}) && !space.Move(&want[i].Box, by[i]) {
+				gone = append(gone, ids[i])
+			}
+		}
+
+		left := space.MoveRun(aabbworld.RunOf(ids, records, recordBox, recordCaps), by, nil)
+
+		for i, r := range records {
+			same := bits(r.Box) == bits(want[i].Box)
+			if !same || r.Vel != untouched.Vel || r.Kind != untouched.Kind {
+				t.Fatalf("edges %b: record %d by %v is %v, Move makes it %v (%+v)", edges, i, by[i],
+					bits(r.Box), bits(want[i].Box), r)
+			}
+		}
+		if !slices.Equal(left, gone) {
+			t.Errorf("edges %b: MoveRun says %v left, Move says %v", edges, left, gone)
+		}
+	}
+}
+
+func bits(box plane.AABB) [8]uint64 {
+	return [8]uint64{
+		math.Float64bits(box.TopLeft.X), math.Float64bits(box.TopLeft.Y),
+		math.Float64bits(box.BottomRight.X), math.Float64bits(box.BottomRight.Y),
+		math.Float64bits(box.Size.X), math.Float64bits(box.Size.Y),
+		math.Float64bits(box.Overhang.X), math.Float64bits(box.Overhang.Y),
+	}
+}
+
+func TestMoveRun_AllocatesNothingAndRefusesDeltasNotOneABox(t *testing.T) {
+	space, err := aabbworld.NewSpace(aabbworld.Config{
+		Width: 100, Height: 100, Edges: aabbworld.OpenX, BucketSize: 16,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := []record{at(10, 10, 0), at(95, 50, 0), at(50, 50, 0)}
+	ids := []uid.UID64{1, 2, 3}
+	run := aabbworld.RunOf(ids, records, recordBox, recordCaps)
+	by := []geom.Vec{geom.NewVec(1, 1), geom.NewVec(30, 0), geom.Vec{}}
+	left := make([]uid.UID64, 0, len(ids))
+	if n := testing.AllocsPerRun(20, func() { left = space.MoveRun(run, by, left[:0]) }); n != 0 {
+		t.Errorf("MoveRun allocates %v times", n)
+	}
+	if !slices.Equal(left, []uid.UID64{2}) {
+		t.Errorf("left = %v, want the box past the open edge", left)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("MoveRun took two deltas for three boxes")
+		}
+	}()
+	space.MoveRun(run, by[:2], nil)
+}

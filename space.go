@@ -151,6 +151,29 @@ func (s *Space) Move(box *plane.AABB, delta geom.Vec) bool {
 	return !s.surface.Left(box)
 }
 
+// MoveRun is Move of the box of record i of run by deltas[i], for every i whose delta is not
+// zero. It returns left with the ID of every box it moved that has left by an open edge appended.
+func (s *Space) MoveRun(run Run, deltas []geom.Vec, left []uid.UID64) []uid.UID64 {
+	if len(deltas) != len(run.IDs) {
+		panic("aabbworld: MoveRun over deltas and ids of different lengths")
+	}
+	if len(deltas) == 0 {
+		return left
+	}
+	boxes := unsafe.Add(run.Base, run.BoxOff)
+	s.surface.TranslateRun(boxes, run.Stride, deltas)
+	if s.Edges&(OpenX|OpenY) == 0 {
+		return left
+	}
+	for i, d := range deltas {
+		box := (*plane.AABB)(unsafe.Add(boxes, uintptr(i)*run.Stride))
+		if (d.X != 0 || d.Y != 0) && s.surface.Left(box) {
+			left = append(left, run.IDs[i])
+		}
+	}
+	return left
+}
+
 // MoveTo puts box with its top-left at to, under the edge rules; false once it has left that way.
 func (s *Space) MoveTo(box *plane.AABB, to geom.Vec) bool {
 	return s.Move(box, to.Sub(box.TopLeft))
