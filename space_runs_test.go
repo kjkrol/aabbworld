@@ -218,3 +218,36 @@ func TestRunOf_RefusesWhatIsNotARunOfTheRows(t *testing.T) {
 		})
 	}
 }
+
+func TestRebuildRuns_QueryAndTickDoNotAllocateOnceWarm(t *testing.T) {
+	space := engineSpace(t, false)
+	rng := rand.New(rand.NewPCG(2, 9))
+	var records []record
+	var ids []uid.UID64
+	for i := range 600 {
+		records = append(records, at(rng.Float64()*1000, rng.Float64()*1000, aabbworld.CanCollide))
+		ids = append(ids, uid.UID64(i+1))
+	}
+	engine := space.CollideEngine(&hooks{}, collide.Config{Reach: 0.5, Iterations: 8})
+	var runs []aabbworld.Run
+	var view aabbworld.View
+	cone := aabbworld.Cone{Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 4, Radius: 200}
+	tick := func() {
+		runs = runs[:0]
+		for i := 0; i < len(records); i += 128 {
+			j := min(i+128, len(records))
+			runs = append(runs, aabbworld.RunOf(ids[i:j], records[i:j], recordBox, recordCaps))
+		}
+		space.RebuildRuns(runs, nil)
+		space.Query(geom.NewAABBAt(geom.NewVec(100, 100), 200, 200), aabbworld.AnyCapability,
+			func(uid.UID64) {})
+		engine.Tick()
+		space.Scan(ids[7], cone, &view)
+	}
+	for range 3 {
+		tick()
+	}
+	if n := testing.AllocsPerRun(20, tick); n != 0 {
+		t.Errorf("a warm tick over runs allocates %v times", n)
+	}
+}
