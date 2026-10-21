@@ -11,6 +11,11 @@
   `left` has room. `Move` is unchanged. `Benchmark_Column_Move`: 5,000 records 32.5 µs box by box,
   28.7 µs a run at a time; gram's world tick of 5,000 boxes 67.1 → 49.6 µs.
 
+**Sight**
+- A warm `Scan` in a world that wraps allocates nothing: the rectangles it searches, split at
+  each wrapping seam, cost an allocation per wrapping axis and up to three on a torus. What a
+  scan sees is unchanged, bit for bit over 648 scans under all nine edge rules.
+
 **Tests**
 - `TestProfile_SeesWhatAFineStepSees` no longer fails one run in forty: its scene drew heights in
   a map's order, so it changed between runs, and in some a sightline grazed a crest closer than
