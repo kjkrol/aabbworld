@@ -189,3 +189,33 @@ func Benchmark_Column_RebuildQueryTick(b *testing.B) {
 		})
 	}
 }
+
+// Benchmark_Column_Move moves every record of the spread scene once: each by Space.Move, or a run
+// of a chunk at a time by Space.MoveRun, its deltas worked out first, as gram's motion does.
+func Benchmark_Column_Move(b *testing.B) {
+	b.Run("each", func(b *testing.B) {
+		sc := spreadScene(b)
+		b.ReportAllocs()
+		for b.Loop() {
+			sc.move()
+		}
+	})
+	b.Run("runs", func(b *testing.B) {
+		sc := spreadScene(b)
+		deltas := make([]geom.Vec, chunkRecords)
+		var left []uid.UID64
+		b.ReportAllocs()
+		for b.Loop() {
+			for i := 0; i < len(sc.records); i += chunkRecords {
+				rows := sc.records[i:min(i+chunkRecords, len(sc.records))]
+				by := deltas[:len(rows)]
+				for k := range rows {
+					r := &rows[k]
+					by[k] = geom.NewVec(r.Vel[0]*r.Vel[2], r.Vel[1]*r.Vel[2])
+				}
+				run := aabbworld.RunOf(sc.ids[i:i+len(rows)], rows, recordBox, recordCaps)
+				left = sc.space.MoveRun(run, by, left[:0])
+			}
+		}
+	})
+}

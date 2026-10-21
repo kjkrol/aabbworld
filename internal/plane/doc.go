@@ -11,7 +11,8 @@
 //
 // A [Surface] is a size and its Edges, built by [NewSurface], or by [NewEuclidean2D] and
 // [NewToroidal2D] for the two common cases. [Surface.Translate] moves a box by a delta, axis by
-// axis: folded back in on a wrapping axis, let go on an open one, clamped on a closed one.
+// axis: folded back in on a wrapping axis, let go on an open one, clamped on a closed one;
+// [Surface.TranslateRun] does it to every box of a column of records by its own delta.
 // [Surface.Expand] grows a box by a margin on every side and folds it the same way. [Surface.WrapAABB]
 // folds any rectangle into a box the plane holds. [Surface.Left] reports a box wholly past an open
 // edge, which a Space then drops from its index.
