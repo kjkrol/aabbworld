@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.15.0 — 2026-10-21
+
+**Plane**
+- `Space.MoveRun(run, deltas, left)` moves the box of every record of a `Run` by its own delta in
+  one call, exactly as `Move` would box by box: a box that stays inside the world is written in
+  place with no call per box (`Surface.TranslateRun`), the others go through the edge rules; a
+  zero delta leaves its box as it is. It returns `left` with the ids of the moved boxes that have
+  left by an open edge, panics when the deltas are not one per record, and allocates nothing when
+  `left` has room. `Move` is unchanged. `Benchmark_Column_Move`: 5,000 records 32.5 µs box by box,
+  28.7 µs a run at a time; gram's world tick of 5,000 boxes 67.1 → 49.6 µs.
+
+**Tests**
+- `TestProfile_SeesWhatAFineStepSees` no longer fails one run in forty: its scene drew heights in
+  a map's order, so it changed between runs, and in some a sightline grazed a crest closer than
+  the fine step resolves. The scene is drawn in id order, and the profile is held to what a fine
+  step can promise.
+
 ## v1.14.1 — 2026-10-20
 
 **Index**
