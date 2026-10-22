@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.15.0 — 2026-10-21
+
+**Plane**
+- `Space.MoveRun(run, deltas, left)` moves the box of every record of a `Run` by its own delta in
+  one call, exactly as `Move` would box by box: a box that stays inside the world is written in
+  place with no call per box (`Surface.TranslateRun`), the others go through the edge rules; a
+  zero delta leaves its box as it is. It returns `left` with the ids of the moved boxes that have
+  left by an open edge, panics when the deltas are not one per record, and allocates nothing when
+  `left` has room. `Move` is unchanged. `Benchmark_Column_Move`: 5,000 records 32.5 µs box by box,
+  28.7 µs a run at a time; gram's world tick of 5,000 boxes 67.1 → 49.6 µs.
+
+**Sight**
+- A warm `Scan` in a world that wraps allocates nothing: the rectangles it searches, split at
+  each wrapping seam, cost an allocation per wrapping axis and up to three on a torus. What a
+  scan sees is unchanged, bit for bit over 648 scans under all nine edge rules.
+
+**Index**
+- `Space.Read()` is the space's `SpaceRead` (`Query`, `Scan`, `Bounds`, `WrapAABB`), safe from
+  many goroutines at once while nothing writes the space: the first reader after a `Rebuild` or
+  an `Invalidate` builds the cells and the ids' positions under a lock, the others waiting for
+  it, and after it a reader pays one atomic load. `SpaceRead.Ready()` indexes the space as that
+  first reader would, for a caller to call before fanning readers out, so none of them waits for
+  another. `Items` and `Item` build the ids' positions alone, not the cells.
+
+**Tests**
+- `TestProfile_SeesWhatAFineStepSees` no longer fails one run in forty: its scene drew heights in
+  a map's order, so it changed between runs, and in some a sightline grazed a crest closer than
+  the fine step resolves. The scene is drawn in id order, and the profile is held to what a fine
+  step can promise.
+
 ## v1.14.1 — 2026-10-20
 
 **Index**

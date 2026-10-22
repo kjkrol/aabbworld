@@ -49,22 +49,19 @@ func shortestDelta(d, size float64) float64 {
 
 // searchAreas appends the index rectangles covering a cone of radius, split at each wrapping seam.
 func searchAreas(origin geom.Vec, radius, w, h float64, wrapX, wrapY bool, dst []geom.AABB) []geom.AABB {
-	lo := geom.NewVec(origin.X-radius, origin.Y-radius)
-	hi := geom.NewVec(origin.X+radius, origin.Y+radius)
-
-	for _, xs := range axisSpans(lo.X, hi.X, w, wrapX) {
-		for _, ys := range axisSpans(lo.Y, hi.Y, h, wrapY) {
-			dst = append(dst, clampRect(
-				geom.NewVec(xs[0], ys[0]),
-				geom.NewVec(xs[1], ys[1]), w, h))
+	xs, nx := axisSpans(origin.X-radius, origin.X+radius, w, wrapX)
+	ys, ny := axisSpans(origin.Y-radius, origin.Y+radius, h, wrapY)
+	for _, x := range xs[:nx] {
+		for _, y := range ys[:ny] {
+			dst = append(dst, clampRect(geom.NewVec(x[0], y[0]), geom.NewVec(x[1], y[1]), w, h))
 		}
 	}
 	return dst
 }
 
-func axisSpans(lo, hi, size float64, wraps bool) [][2]float64 {
+func axisSpans(lo, hi, size float64, wraps bool) (spans [2][2]float64, n int) {
 	if !wraps {
-		return [][2]float64{{lo, hi}}
+		return [2][2]float64{{lo, hi}}, 1
 	}
 	return splitAxis(lo, hi, size)
 }
@@ -77,10 +74,10 @@ func wrapSize(size float64, wraps bool) float64 {
 	return 0
 }
 
-// splitAxis wraps [lo, hi] into [0, size), cutting it in two where it crosses the seam.
-func splitAxis(lo, hi, size float64) [][2]float64 {
+// splitAxis wraps [lo, hi] into [0, size): the first n of spans, two where it crosses the seam.
+func splitAxis(lo, hi, size float64) (spans [2][2]float64, n int) {
 	if size <= 0 || hi-lo >= size {
-		return [][2]float64{{0, size}}
+		return [2][2]float64{{0, size}}, 1
 	}
 	span := hi - lo
 	lo = math.Mod(lo, size)
@@ -89,9 +86,9 @@ func splitAxis(lo, hi, size float64) [][2]float64 {
 	}
 	hi = lo + span
 	if hi <= size {
-		return [][2]float64{{lo, hi}}
+		return [2][2]float64{{lo, hi}}, 1
 	}
-	return [][2]float64{{lo, size}, {0, hi - size}}
+	return [2][2]float64{{lo, size}, {0, hi - size}}, 2
 }
 
 func clampRect(lo, hi geom.Vec, w, h float64) geom.AABB {

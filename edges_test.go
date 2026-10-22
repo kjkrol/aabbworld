@@ -247,6 +247,37 @@ func TestScan_SeesThroughAWrappingSeamOnly(t *testing.T) {
 	}
 }
 
+func TestScan_DoesNotAllocateOnceWarmUnderEveryEdgeRule(t *testing.T) {
+	observer := uid.UID64(1)
+	wrapX, wrapY, openX, openY := aabbworld.WrapX, aabbworld.WrapY, aabbworld.OpenX, aabbworld.OpenY
+	for _, edges := range []aabbworld.Edges{
+		0, wrapX, wrapY, wrapX | wrapY, openX, openY, openX | openY, wrapX | openY, openX | wrapY,
+	} {
+		w := edgedWorld(t, edges)
+		w.put(observer, plane.NewAABB(geom.NewVec(20, 20), 10, 10), aabbworld.Plain)
+		for i, at := range []geom.Vec{
+			geom.NewVec(940, 940), geom.NewVec(940, 60), geom.NewVec(60, 940),
+			geom.NewVec(120, 90), geom.NewVec(990, 10),
+		} {
+			w.put(uid.UID64(i+2), plane.NewAABB(at, 20, 20), aabbworld.Plain)
+		}
+		w.rebuild()
+		// across the corner, so that a wrapping world is searched on both sides of each seam
+		cone := aabbworld.Cone{Direction: geom.NewVec(-1, -1), HalfAngle: math.Pi / 2, Radius: 200}
+		var view aabbworld.View
+		depths := make([]float32, 0, 33)
+		scan := func() {
+			w.space.Scan(observer, cone, &view)
+			view.Entities(func(uid.UID64, float64) {})
+			depths = view.Depths(33, depths[:0])
+		}
+		scan()
+		if allocs := testing.AllocsPerRun(20, scan); allocs > 0 {
+			t.Errorf("edges %04b: a warm Scan allocates %.0f times a run, want none", edges, allocs)
+		}
+	}
+}
+
 func TestQuery_CrossesAWrappingSeamOnly_AndFiltersByCapability(t *testing.T) {
 	w := edgedWorld(t, aabbworld.WrapX)
 	acrossX, acrossY, solid := uid.UID64(1), uid.UID64(2), uid.UID64(3)

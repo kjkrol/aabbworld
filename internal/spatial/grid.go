@@ -2,6 +2,8 @@ package spatial
 
 import (
 	"slices"
+	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/kjkrol/aabbworld/geom"
@@ -70,8 +72,10 @@ type Grid struct {
 	listed   uint32 // the Rebuild entries were listed for
 	slotOf   []int32
 	stamps   []uint32
-	mapped   uint32 // the Rebuild slotOf was filled for
-	stale    bool
+	mapped   uint32      // the Rebuild slotOf was filled for
+	stale    atomic.Bool // the cells are behind
+	unlisted atomic.Bool // the items and the ids' positions are behind
+	mu       sync.Mutex  // whoever reads first after a Rebuild or Invalidate brings the grid up
 
 	pieces []gridPiece
 	starts []uint32
@@ -142,20 +146,53 @@ func (g *Grid) RebuildRuns(runs []Run, items []Item) {
 		g.count += len(items)
 	}
 	g.rebuilds++
-	g.stale = true
+	g.unlisted.Store(true)
+	g.stale.Store(true)
 }
 
 // Invalidate marks the cells as behind the boxes of the items, which have moved since they were built.
-func (g *Grid) Invalidate() { g.stale = true }
+func (g *Grid) Invalidate() { g.stale.Store(true) }
 
-// index builds the cells from the records as they are now, and the ids' positions once a
-// Rebuild: after the first Query every reader of the grid only reads, so several goroutines may
-// scan it at once.
+// Ready brings the cells, the items and the ids' positions up to the last Rebuild or Invalidate:
+// the first reader after them does, under the lock, the others waiting; then every reader only
+// reads, so several goroutines may read the grid at once while nothing writes it.
+func (g *Grid) Ready() {
+	if g.stale.Load() {
+		g.bringUp()
+	}
+}
+
+func (g *Grid) bringUp() {
+	g.mu.Lock()
+	if g.stale.Load() {
+		g.index()
+		g.unlisted.Store(false)
+		g.stale.Store(false)
+	}
+	g.mu.Unlock()
+}
+
+// ready for the items and the ids' positions alone
+func (g *Grid) readyListed() {
+	if g.unlisted.Load() {
+		g.listUp()
+	}
+}
+
+func (g *Grid) listUp() {
+	g.mu.Lock()
+	if g.unlisted.Load() {
+		g.mapIDs()
+		g.unlisted.Store(false)
+	}
+	g.mu.Unlock()
+}
+
+// index builds the cells from the records as they are now, and the ids' positions once a Rebuild
 func (g *Grid) index() {
 	if g.mapped != g.rebuilds {
 		g.mapIDs()
 	}
-	g.stale = false
 	g.pieces = g.pieces[:0]
 	cells := int(g.side) * int(g.side)
 	if cap(g.starts) < cells+1 {
@@ -225,7 +262,7 @@ func (g *Grid) add(box geom.AABB, id uid.UID64, caps Capability) {
 // mapIDs notes the position of every id of the last Rebuild.
 func (g *Grid) mapIDs() {
 	g.mapped = g.rebuilds
-	for at, e := range g.Items() {
+	for at, e := range g.items() {
 		g.remember(e.ID, int32(at))
 	}
 }
@@ -242,9 +279,7 @@ func (g *Grid) remember(id uid.UID64, at int32) {
 
 // Item is the item the entity id names, if the last Rebuild was told of it.
 func (g *Grid) Item(id uid.UID64) (*Entry, bool) {
-	if g.mapped != g.rebuilds {
-		g.mapIDs()
-	}
+	g.readyListed()
 	i := int(id.Index())
 	if i >= len(g.slotOf) || g.stamps[i] != g.rebuilds {
 		return nil, false
@@ -267,6 +302,11 @@ func (g *Grid) EntryAABB(id uid.UID64) (geom.AABB, bool) {
 
 // Items is what the last Rebuild was told of, by position.
 func (g *Grid) Items() []Entry {
+	g.readyListed()
+	return g.entries
+}
+
+func (g *Grid) items() []Entry {
 	if g.listed != g.rebuilds {
 		g.list()
 	}
@@ -295,9 +335,7 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	if !ok {
 		return 0
 	}
-	if g.stale {
-		g.index()
-	}
+	g.Ready()
 	x1, y1 := g.cellOf(area.TopLeft.X), g.cellOf(area.TopLeft.Y)
 	x2, y2 := g.cellOf(area.BottomRight.X), g.cellOf(area.BottomRight.Y)
 	found := 0

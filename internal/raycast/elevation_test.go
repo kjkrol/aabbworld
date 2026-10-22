@@ -1,8 +1,10 @@
 package raycast_test
 
 import (
+	"maps"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"testing"
 
 	"github.com/kjkrol/aabbworld/geom"
@@ -208,12 +210,12 @@ func TestElevation_WithoutHeightsTheEyeChangesNothing(t *testing.T) {
 	}
 }
 
-// elevatedScene is translucentScene with heights: every second box is a walker, every fifth a
-// hawk, the rest walls or forests, over ground that rolls with a sine.
+// elevatedScene is translucentScene with heights, the same for the same r: every second box is a
+// walker, every fifth a hawk, the rest walls or forests, over ground that rolls with a sine.
 func elevatedScene(r *rand.Rand) (*fakeSpace, elevatedOracle) {
 	s, boxes, taus := translucentScene(r)
 	o := elevatedOracle{boxes: boxes, taus: taus, bands: map[uid.UID64]band{}, eye: 6, step: 33.3}
-	for id := range boxes {
+	for _, id := range slices.Sorted(maps.Keys(boxes)) {
 		switch {
 		case id%5 == 0:
 			o.bands[id] = band{30 + 4*r.Float64(), 34 + 4*r.Float64()}

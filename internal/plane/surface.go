@@ -1,6 +1,8 @@
 package plane
 
 import (
+	"unsafe"
+
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 )
@@ -67,6 +69,26 @@ func (s *Surface) Translate(aabb *plane.AABB, delta geom.Vec) {
 	} else {
 		aabb.TopLeft.Y, aabb.BottomRight.Y, aabb.Overhang.Y =
 			move(lo, aabb.Size.Y, s.size.Y, s.edges&WrapY != 0, s.edges&OpenY != 0)
+	}
+}
+
+// TranslateRun is Translate of the box at boxes+i·stride by deltas[i], for every i whose delta is
+// not zero.
+func (s *Surface) TranslateRun(boxes unsafe.Pointer, stride uintptr, deltas []geom.Vec) {
+	w, h := s.size.X, s.size.Y
+	for i, d := range deltas {
+		if d.X == 0 && d.Y == 0 {
+			continue
+		}
+		aabb := (*plane.AABB)(unsafe.Add(boxes, uintptr(i)*stride))
+		x, y := aabb.TopLeft.X+d.X, aabb.TopLeft.Y+d.Y
+		if !inside(x, aabb.Size.X, w) || !inside(y, aabb.Size.Y, h) {
+			s.Translate(aabb, d)
+			continue
+		}
+		aabb.TopLeft = geom.Vec{X: x, Y: y}
+		aabb.BottomRight = geom.Vec{X: x + aabb.Size.X, Y: y + aabb.Size.Y}
+		aabb.Overhang = geom.Vec{}
 	}
 }
 

@@ -115,8 +115,20 @@ func TestProfile_DepthsAndShadowsMatchTheOracle(t *testing.T) {
 	}
 }
 
+// lowered is g with every height drop lower.
+func (g ridges) lowered(drop float64) ridges {
+	low := ridges{span: g.span, reads: new(int)}
+	for _, h := range g.heights {
+		low.heights = append(low.heights, h-drop)
+	}
+	return low
+}
+
 // What the profile sees is what a ground sampled a hundred times as finely sees, for reading the
-// ground a few times a ray.
+// ground a few times a ray. The fine step reads points of the same ground, never above it, so it
+// sees all the profile sees; reading a crest up to a step short, it may see a little over it, and
+// what it sees so the profile sees over the ground two of its steps lower (here no ridge rises,
+// nor sightline falls, one in one).
 func TestProfile_SeesWhatAFineStepSees(t *testing.T) {
 	r := rand.New(rand.NewPCG(79, 83))
 	for trial := range 10 {
@@ -129,13 +141,18 @@ func TestProfile_SeesWhatAFineStepSees(t *testing.T) {
 			fineReads++
 			return g.at(p)
 		}
+		lower := profiled
+		low := g.lowered(2 * fine.GroundStep)
+		lower.Profile, lower.Ground = low, low.at
 		*g.reads = 0
 		got := visible(t, s, eye, profiled)
 		reads := *g.reads
 		want := visible(t, s, eye, fine)
+		over := visible(t, s, eye, lower)
 		for id := range want {
-			if !got[id] {
-				t.Errorf("trial %d: a fine step sees %d, the profile does not", trial, id)
+			if !over[id] {
+				t.Errorf("trial %d: a fine step sees %d, the profile not even over a lower ground",
+					trial, id)
 			}
 		}
 		for id := range got {

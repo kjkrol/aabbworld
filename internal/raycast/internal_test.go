@@ -53,7 +53,8 @@ func TestSplitAxis(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := splitAxis(tc.lo, tc.hi, tc.size)
+			spans, n := splitAxis(tc.lo, tc.hi, tc.size)
+			got := spans[:n]
 			if len(got) != len(tc.want) {
 				t.Fatalf("splitAxis(%v,%v,%v) = %v, want %v", tc.lo, tc.hi, tc.size, got, tc.want)
 			}
