@@ -16,6 +16,14 @@
   each wrapping seam, cost an allocation per wrapping axis and up to three on a torus. What a
   scan sees is unchanged, bit for bit over 648 scans under all nine edge rules.
 
+**Index**
+- `Space.Read()` is the space's `SpaceRead` (`Query`, `Scan`, `Bounds`, `WrapAABB`), safe from
+  many goroutines at once while nothing writes the space: the first reader after a `Rebuild` or
+  an `Invalidate` builds the cells and the ids' positions under a lock, the others waiting for
+  it, and after it a reader pays one atomic load. `SpaceRead.Ready()` indexes the space as that
+  first reader would, for a caller to call before fanning readers out, so none of them waits for
+  another. `Items` and `Item` build the ids' positions alone, not the cells.
+
 **Tests**
 - `TestProfile_SeesWhatAFineStepSees` no longer fails one run in forty: its scene drew heights in
   a map's order, so it changed between runs, and in some a sightline grazed a crest closer than

@@ -68,7 +68,8 @@
 // straddling a seam may be reported once per piece. [Space.Scan] fills a [View] with what one
 // observer sees through a [Cone]: the entities in sight, nearest first ([View.Entities]), the reach
 // of sight at evenly spaced angles ([View.Depths]), or the lit region as a fan of points
-// ([View.Outline]). A View is a reusable buffer for one goroutine.
+// ([View.Outline]). A View is a reusable buffer for one goroutine. [Space.Read] queries and scans
+// from many goroutines at once while nothing writes the Space.
 //
 // Sight has a budget of the cone's radius along every angle. An empty stretch costs its length; a
 // stretch through an entity of transparency τ costs its length divided by τ; an entity at τ ≤ 0

@@ -19,7 +19,12 @@ type Space struct {
 	Config
 	grid    *spatial.Grid
 	surface *iplane.Surface
+	read    SpaceRead
 }
+
+// SpaceRead reads a Space: what lies where and what an observer sees, from as many goroutines at
+// once as read it while nothing writes the Space; a Scan's View is one goroutine's.
+type SpaceRead struct{ s *Space }
 
 // Capability is what may be done with an entity, as a set of up to eight bits —
 // a question names the bits it wants, and only entities sharing one are answered with.
@@ -120,8 +125,33 @@ func NewSpace(cfg Config) (*Space, error) {
 	}
 	surface := iplane.NewSurface(float64(cfg.Width), float64(cfg.Height), iplane.Edges(cfg.Edges))
 	grid := spatial.NewGrid(surface, spatial.ResolutionFrom(max(cfg.Width, cfg.Height)), spatial.ResolutionFrom(cfg.BucketSize))
-	return &Space{Config: cfg, grid: grid, surface: surface}, nil
+	s := &Space{Config: cfg, grid: grid, surface: surface}
+	s.read.s = s
+	return s, nil
 }
+
+// Read reads s.
+func (s *Space) Read() *SpaceRead { return &s.read }
+
+// Query is the Space's Query.
+func (r *SpaceRead) Query(box geom.AABB, want Capability, fn func(id uid.UID64)) int {
+	return r.s.Query(box, want, fn)
+}
+
+// Scan is the Space's Scan.
+func (r *SpaceRead) Scan(observer uid.UID64, cone Cone, v *View) bool {
+	return r.s.Scan(observer, cone, v)
+}
+
+// Ready indexes the Space as the first Query or Scan after a Rebuild would: called before
+// readers fan out, none of them waits for another to index it.
+func (r *SpaceRead) Ready() { r.s.grid.Ready() }
+
+// Bounds is the Space's Bounds.
+func (r *SpaceRead) Bounds() (width, height uint32, edges Edges) { return r.s.Bounds() }
+
+// WrapAABB is the Space's WrapAABB.
+func (r *SpaceRead) WrapAABB(box geom.AABB) plane.AABB { return r.s.WrapAABB(box) }
 
 // Rebuild hands the Space items, which must stay put until the next Rebuild. Indexing waits for
 // the first Query or Scan that needs it, so several Rebuilds in a row cost one indexing.
