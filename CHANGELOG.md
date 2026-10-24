@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.16.0 — 2026-10-24
 
 **Index**
 - Built with `GOEXPERIMENT=simd` on amd64 and run on a CPU with AVX2, the pair sweep behind the
