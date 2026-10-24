@@ -17,6 +17,7 @@ type pairSweep struct {
 	cursor []uint32
 	cells  []sweepEntry
 	seam   []seamPair
+	cols   sweepCols // a crowded cell's boxes, laid out for the wide sweep
 
 	shift Resolution
 	side  uint32
@@ -41,6 +42,9 @@ type sweepEntry struct {
 }
 
 type seamPair struct{ a, b int32 }
+
+// wideFrom is the fewest entries a cell needs to be swept four at a time, when wide.
+const wideFrom = 8
 
 // listItems gathers every matching record's grown images, and counts them into their cells.
 func (s *pairSweep) listItems(
@@ -145,6 +149,10 @@ func (s *pairSweep) visit(fn func(a, b int32)) {
 			continue
 		}
 		cx, cy := uint32(cell)%s.side, uint32(cell)/s.side
+		if wide && len(entries) >= wideFrom {
+			s.visitWide(entries, cx, cy, fn)
+			continue
+		}
 		for i := range entries {
 			a := &entries[i]
 			for j := i + 1; j < len(entries); j++ {
@@ -156,18 +164,23 @@ func (s *pairSweep) visit(fn func(a, b int32)) {
 					s.cellOf(max(a.box.TopLeft.Y, b.box.TopLeft.Y)) != cy {
 					continue
 				}
-				lo, hi := a.at, b.at
-				if lo > hi {
-					lo, hi = hi, lo
-				}
-				if a.multi || b.multi {
-					s.seam = append(s.seam, seamPair{lo, hi})
-					continue
-				}
-				fn(lo, hi)
+				s.meet(a, b, fn)
 			}
 		}
 	}
+}
+
+// meet takes two entries of different items, touching in the cell that owns where they meet.
+func (s *pairSweep) meet(a, b *sweepEntry, fn func(a, b int32)) {
+	lo, hi := a.at, b.at
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	if a.multi || b.multi {
+		s.seam = append(s.seam, seamPair{lo, hi})
+		return
+	}
+	fn(lo, hi)
 }
 
 // flushSeam reports the pairs met through a wrapped image, each once.
