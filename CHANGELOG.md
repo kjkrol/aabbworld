@@ -1,6 +1,14 @@
 # Changelog
 
-## v1.15.0 — 2026-10-21
+## Unreleased
+
+**Index**
+- Built with `GOEXPERIMENT=simd` on amd64 and run on a CPU with AVX2, the pair sweep behind the
+  collision tick tests a cell of eight entries or more four boxes at a time (`simd/archsimd`). It
+  finds the same pairs in the same order as before. The `BroadPhase` crowd in 256-unit buckets
+  ticks in 3.10 ms instead of 6.95, the mixed-size `Grid_RebuildPairsQuery` in 5.51 ms instead of
+  7.95, and sparse cells are unchanged. Without the experiment, or on another CPU, the sweep is
+  what it was. `make test-simd` and `make bench-simd` build with the experiment.
 
 **Plane**
 - `Space.MoveRun(run, deltas, left)` moves the box of every record of a `Run` by its own delta in

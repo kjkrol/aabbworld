@@ -57,6 +57,50 @@ One tick of the index alone, on a 1024×1024 torus with 16-unit cells: every box
 Profile of the 8,388 boxes 5×5 case: building the query cells ≈31%, building the pair sweep ≈24%,
 testing pairs ≈32%, the eight queries ≈2%.
 
+## Wide pair sweep — `GOEXPERIMENT=simd`
+
+Built with `GOEXPERIMENT=simd` on amd64, and on a CPU with AVX2, the pair sweep tests a cell of
+eight entries or more four boxes at a time (`simd/archsimd`). Median of 10 runs of each build, run
+alternately, 2026-10-23; this session's machine drifted ±7%, so "~" marks a difference within it.
+
+| Scene | plain build | `GOEXPERIMENT=simd` |
+|:---|---:|---:|
+| `BroadPhase` tick, 12,000 boxes 8×8 plus 20 boxes 100×100, bucket 256 | 6.95 ms | **3.10 ms** (−55%) |
+| `Grid_RebuildPairsQuery`, 8,388 boxes of mixed sizes | 7.95 ms | **5.51 ms** (−31%) |
+| `BroadPhase` tick, 16,777 boxes 10×10 covering 40%, bucket 32 | 5.90 ms | **4.77 ms** (−19%) |
+| `BroadPhase` tick, 8,388 boxes 10×10 covering 20%, bucket 32 | 1.73 ms | 1.64 ms (~) |
+| `BroadPhase` tick, 33,554 boxes 5×5 covering 20%, bucket 16 | 7.95 ms | 7.62 ms (~) |
+| `Grid_RebuildPairsQuery`, 8,388 boxes 5×5 | 1.15 ms | 1.18 ms (~) |
+| `Column_RebuildQueryTick`, `Collide_Ground` | | ~ |
+
+In the first scene the pair tests were 83% of the tick: a 256-unit cell holds about 190 entries,
+so a tick makes some 1.2 million box tests. With 16- or 32-unit cells of two to four entries the
+time goes to building the cells, which SIMD does not touch.
+
+What the work taught us:
+
+* **One pair at a time gains nothing.** A box's four numbers fill one 256-bit register, but
+  comparing two boxes needs a lane shuffle and a mask extraction that cost what the four scalar
+  comparisons do. The gain is one box against the next four: the four boxes' edges load from four
+  columns, four compares and one `VMOVMSKPD` give four bits, with no branch to mispredict.
+* **Columns only where they pay.** Laying every cell out in columns cost the plain build +7…10% on
+  the sparse scenes: six scattered stores per piece instead of one. The cells stay rows of
+  structs; a crowded cell is copied into columns just before its wide sweep, O(n) against its
+  O(n²) tests.
+* **The cell's claim goes into the same pass.** A pair belongs to the cell holding the top-left
+  corner of its overlap. In the mixed scene that scalar check was 16% of the tick, since a 60×60
+  box meets its neighbours in many cells. Both entries reach the cell, so the corner cannot lie past
+  it: one lower bound per axis is the whole check.
+* **Eight entries is the threshold.** Two and four did as well on the crowd; sixteen lost half the
+  gain in the mixed scene.
+* **The compiler does not clear the upper halves.** After 256-bit code every SSE instruction of the
+  scalar code pays a false dependency until a `VZEROUPPER`; the sweep issues one before calling
+  back and on return.
+* **AVX2, not AVX.** Joining the masks compiles to `VPAND` on 256 bits.
+* **The corners of a box in one register did not pay.** Finding a piece's four cells with one
+  convert and shift instead of four was +4% on the sparse scenes: building the cells is bound by
+  memory, and the trip through a vector costs more than it saves.
+
 ## Collision solver — `Benchmark_Solver_*`
 
 The solver alone, fed pre-computed pairs.
@@ -228,13 +272,19 @@ through the entry's pointer); their medians drift more under the machine's noise
   bytes, for a 2–18% faster collision tick across the broad-phase scenes.
 * **Zero allocations on the tick.** Rebuild, Pairs, Solve, Query and Scan all report 0 allocs/op once
   their buffers have grown to the scene.
+* **SIMD pays where the tests are many to a cell.** Four boxes at a time halved the crowd's tick
+  and did nothing for sparse cells; see [Wide pair sweep](#wide-pair-sweep--goexperimentsimd).
 
 ## How to benchmark
 
 ```bash
-make bench        # the whole suite once, with allocations
-make bench-save   # 5 repeats, raw output under bench_results/ (ignored by git)
+make bench             # the whole suite once, with allocations
+make bench-save        # 5 repeats, raw output under bench_results/ (ignored by git)
+make bench-simd        # the suite once, built with GOEXPERIMENT=simd
+make bench-save-simd   # bench-save so built, into a file marked -simd
 ```
+
+`make test-simd` runs the tests built so, comparing the wide sweep with the plain one.
 
 To judge a change on this or any drifting machine, keep a copy of the baseline tree and run the two
 alternately, then compare medians:

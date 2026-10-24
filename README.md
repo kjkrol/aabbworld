@@ -56,6 +56,9 @@ aabbworld requires **Go 1.27** or newer.
 go get github.com/kjkrol/aabbworld
 ```
 
+Optionally, build with `GOEXPERIMENT=simd`: on amd64 with AVX2, the collision tick then tests the
+boxes of a crowded cell four at a time, with the same results (see [Performance](#performance)).
+
 <a id="features"></a>
 # ✨ Key Features
 
@@ -243,6 +246,7 @@ reports 0 allocs/op.
 |:---|:---|---:|
 | Collision tick (pair, ask, separate) | 8,388 boxes, 10×10 each, covering 20% of a 2048×2048 torus | 1.78 ms |
 | Collision tick | 33,554 boxes, 5×5 each, covering 20% of the same torus | 8.6 ms |
+| Collision tick, crowded cells | 12,000 boxes 8×8 and 20 of 100×100, 256-unit buckets | 6.95 ms; 3.10 ms with `GOEXPERIMENT=simd` |
 | Rebuild + pairs + 8 queries | 8,388 boxes, 5×5 each, on a 1024×1024 torus | 1.23 ms |
 | Solve confirmed pairs | 13,547 candidate pairs, 3,763 contacts | 4.25 ms |
 | Scan a 90° cone and list what it sees | 1,000 entities in sight range | 26.7 µs |

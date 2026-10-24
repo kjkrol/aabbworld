@@ -106,6 +106,14 @@
 // that is shorter. A collide.FieldHandler hears of each contact with the ground once per entity
 // and cell a tick.
 //
+// # SIMD
+//
+// Built with GOEXPERIMENT=simd on amd64 and run on a CPU with AVX2, the collision engine's pair
+// sweep tests a crowded cell — eight entries or more — four boxes at a time: one box against the
+// next four, their edges loaded side by side, the cell's claim on each pair checked in the same
+// pass. It finds the same pairs, in the same order, as the plain sweep, which every other build and
+// CPU runs. Crowds in large buckets gain most, sparse cells nothing; see BENCHMARKS.md.
+//
 // # Package dependencies
 //
 // The packages form a strict acyclic graph. Each layer imports only layers below it:
