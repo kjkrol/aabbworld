@@ -5,14 +5,17 @@
 // # Handler
 //
 // One [Engine.Tick] talks to the Handler in a fixed order. Touch is asked once for every pair of
-// boxes that overlap, with the penetration between them; the handler may confirm the pair as it is,
-// refine the penetration (a round shape inside a square box touches later than the box does) or
-// veto the pair for this tick. Contact is told each confirmed pair once, with the penetration it is
-// being separated by. Moved is told every box the engine pushed, once, where it came to rest —
-// already written where the Space reads it, so only a caller whose items are a copy writes it
-// back to whatever owns it. A box pushed out through an open edge is not Moved; it is listed by
-// [Engine.Left] until the next Tick, as a [Leaver] with the box it came to rest at, wholly past
-// the edge, written where the Space reads it the same way.
+// boxes that overlap, with the penetration between them — boxes overlapping by no more than
+// float32's rounding of where they lie touch, and are no pair; the handler may confirm the pair as
+// it is, refine the penetration (a round shape inside a square box touches later than the box does)
+// or veto the pair for this tick, and says what part of the push apart moves the first box, the
+// rest moving the second: ½ shares it evenly, 0 leaves the first where it is; a Static box never
+// moves whatever the share. Contact is told each confirmed pair once, with the penetration it
+// is being separated by. Moved is told every box the engine pushed, once, where it came to rest —
+// already written where the Space reads it, so only a caller whose items are a copy writes it back
+// to whatever owns it. A box pushed out through an open edge is not Moved; it is listed by
+// [Engine.Left] until the next Tick, as a [Leaver] with the box it came to rest at, wholly past the
+// edge, written where the Space reads it the same way.
 //
 // # Config
 //

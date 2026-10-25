@@ -48,6 +48,9 @@ type seamPair struct{ a, b int32 }
 // wideFrom is the fewest entries a cell needs to be swept eight at a time, when wide.
 const wideFrom = 8
 
+// Wide reports whether crowded cells are swept eight entries at a time.
+func Wide() bool { return wide }
+
 // listItems gathers every matching record's grown images, and counts them into their cells.
 func (s *pairSweep) listItems(
 	surface *iplane.Surface, columns []column, reach float32, want Capability,

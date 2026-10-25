@@ -8,8 +8,10 @@ import (
 
 // Handler is told what an Engine finds: each overlapping pair once, and every box it pushed.
 type Handler interface {
-	// Touch says whether the shapes in two overlapping boxes really touch, and by how much.
-	Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool)
+	// Touch says whether the shapes in two overlapping boxes really touch, by how much, and what
+	// part of the push apart moves a, the rest moving b: 0 leaves a, ½ shares it evenly; a Static
+	// box never moves.
+	Touch(a, b uid.UID64, pen geom.Vec) (push geom.Vec, shareA float32, ok bool)
 	// Contact is a pair Touch confirmed, with the penetration it is being separated by.
 	Contact(a, b uid.UID64, pen geom.Vec)
 	// Moved is a box the Engine pushed, where it came to rest.

@@ -16,7 +16,7 @@
 // which side is [StaticA] or [StaticB] and whether the pair is a [Sensor] pair that is only ever
 // reported. [Solver.Solve] sweeps the batch for up to a number of passes: each overlapping pair is
 // put to the [Touch] callback once, and a confirmed pair is pushed apart along its penetration, the
-// whole way by the non-static side or half each. A pair is measured again only when one of its
+// whole way by the non-static side or shared as Touch said, half each without one. A pair is measured again only when one of its
 // boxes has moved since, so a settled batch costs one pass. [Solver.VisitMoved] then names every
 // item a pass shifted.
 //

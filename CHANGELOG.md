@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+**Collisions**
+- Breaking: `collide.Handler.Touch` also returns the part of a pair's push apart that moves its
+  first box, the rest moving the second (`Touch(a, b, pen) (push, shareA, ok)`): ½ shares it as
+  before, 0 leaves the first where it is, a `Static` box never moves whatever the share; outside
+  0–1 it is held to it, and no number is ½. The engine knows no mass: a caller weighing its
+  boxes hands the share, the lighter moved more.
+- Two boxes overlapping by no more than float32's rounding of where they lie (a few steps at
+  their edges) touch: the engine neither reports nor pushes them. Shared by halves, so small an
+  overlap moved neither box and wandered round a stack of boxes at rest, a contact every tick.
+  `BroadPhase` 0.6–2% longer, `Collide_Ground` 2–4%.
+
+**SIMD**
+- `SIMD()` reports whether the collision engine's pair sweep tests crowded cells eight boxes at a
+  time, for a program to log what it runs with.
+
 ## v1.17.0 — 2026-10-25
 
 **Numbers**

@@ -104,9 +104,9 @@ func (g segmentGround) Walls(_ uid.UID64, box geom.AABB, visit func(collide.Fiel
 // quiet is a Handler that confirms every pair and listens to nothing.
 type quiet struct{}
 
-func (quiet) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, bool) { return pen, true }
-func (quiet) Contact(_, _ uid.UID64, _ geom.Vec)                  {}
-func (quiet) Moved(uid.UID64, plane.AABB)                         {}
+func (quiet) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, float32, bool) { return pen, 0.5, true }
+func (quiet) Contact(_, _ uid.UID64, _ geom.Vec)                           {}
+func (quiet) Moved(uid.UID64, plane.AABB)                                  {}
 
 // groundUnitsAt are the units' starting boxes, 2 into the walls' tops, clear of each other.
 func groundUnitsAt() []aabbworld.Item {

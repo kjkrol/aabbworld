@@ -116,8 +116,10 @@ type writeBack struct {
 	contacts int
 }
 
-func (w *writeBack) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, bool) { return pen, true }
-func (w *writeBack) Contact(uid.UID64, uid.UID64, geom.Vec)              { w.contacts++ }
+func (w *writeBack) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, float32, bool) {
+	return pen, 0.5, true
+}
+func (w *writeBack) Contact(uid.UID64, uid.UID64, geom.Vec) { w.contacts++ }
 func (w *writeBack) Moved(id uid.UID64, box plane.AABB) {
 	w.records[id-1].Box = box
 }
@@ -125,9 +127,11 @@ func (w *writeBack) Moved(id uid.UID64, box plane.AABB) {
 // inPlace is a Handler for records handed over as runs: the boxes are pushed where they lie.
 type inPlace struct{ contacts int }
 
-func (h *inPlace) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, bool) { return pen, true }
-func (h *inPlace) Contact(uid.UID64, uid.UID64, geom.Vec)              { h.contacts++ }
-func (h *inPlace) Moved(uid.UID64, plane.AABB)                         {}
+func (h *inPlace) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, float32, bool) {
+	return pen, 0.5, true
+}
+func (h *inPlace) Contact(uid.UID64, uid.UID64, geom.Vec) { h.contacts++ }
+func (h *inPlace) Moved(uid.UID64, plane.AABB)            {}
 
 // Benchmark_Column_RebuildQueryTick is one tick of a space over records in a column of 72-byte
 // structs, as gram's are with the box in float32: every record moves, then Rebuild, eight 100x100
