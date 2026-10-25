@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.18.0 — 2026-10-25
 
 **Collisions**
 - Breaking: `collide.Handler.Touch` also returns the part of a pair's push apart that moves its
