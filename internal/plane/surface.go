@@ -30,15 +30,15 @@ type Surface struct {
 }
 
 // NewSurface builds a plane of the given size and edge rules.
-func NewSurface(sizeX, sizeY float64, edges Edges) *Surface {
+func NewSurface(sizeX, sizeY float32, edges Edges) *Surface {
 	return &Surface{size: geom.NewVec(sizeX, sizeY), edges: edges}
 }
 
 // NewEuclidean2D builds a plane closed on every side.
-func NewEuclidean2D(sizeX, sizeY float64) *Surface { return NewSurface(sizeX, sizeY, 0) }
+func NewEuclidean2D(sizeX, sizeY float32) *Surface { return NewSurface(sizeX, sizeY, 0) }
 
 // NewToroidal2D builds a plane that wraps on both axes.
-func NewToroidal2D(sizeX, sizeY float64) *Surface { return NewSurface(sizeX, sizeY, Torus) }
+func NewToroidal2D(sizeX, sizeY float32) *Surface { return NewSurface(sizeX, sizeY, Torus) }
 
 // WrapAABB folds a rectangle into the plane: wrapped on a wrapping axis, clipped on any other.
 func (s *Surface) WrapAABB(aabb geom.AABB) plane.AABB {
@@ -50,7 +50,7 @@ func (s *Surface) WrapAABB(aabb geom.AABB) plane.AABB {
 }
 
 // Expand grows aabb by margin on every side and folds it like WrapAABB.
-func (s *Surface) Expand(aabb *plane.AABB, margin float64) {
+func (s *Surface) Expand(aabb *plane.AABB, margin float32) {
 	aabb.TopLeft.AddMutable(geom.NewVec(-margin, -margin))
 	aabb.Size.AddMutable(geom.NewVec(2*margin, 2*margin))
 	s.normalizeAABB(aabb)
@@ -93,7 +93,7 @@ func (s *Surface) TranslateRun(boxes unsafe.Pointer, stride uintptr, deltas []ge
 }
 
 // inside reports whether a box of length from lo lies within the world: every edge rule leaves it
-func inside(lo, length, world float64) bool {
+func inside(lo, length, world float32) bool {
 	return lo >= 0 && lo < world && lo+length <= world
 }
 
@@ -105,7 +105,7 @@ func (s *Surface) Left(aabb *plane.AABB) bool {
 	return s.edges&OpenY != 0 && (aabb.BottomRight.Y <= 0 || aabb.TopLeft.Y >= s.size.Y)
 }
 
-func move(lo, length, world float64, wraps, open bool) (newLo, hi, overhang float64) {
+func move(lo, length, world float32, wraps, open bool) (newLo, hi, overhang float32) {
 	switch {
 	case wraps:
 		return fold(lo, length, world)
@@ -117,7 +117,7 @@ func move(lo, length, world float64, wraps, open bool) (newLo, hi, overhang floa
 	}
 }
 
-func fold(lo, length, world float64) (newLo, hi, overhang float64) {
+func fold(lo, length, world float32) (newLo, hi, overhang float32) {
 	lo = wrap(lo, world)
 	hi = lo + length
 	if hi > world {
@@ -126,7 +126,7 @@ func fold(lo, length, world float64) (newLo, hi, overhang float64) {
 	return lo, hi, 0
 }
 
-func clip(lo, length, world float64) (newLo, hi, overhang float64) {
+func clip(lo, length, world float32) (newLo, hi, overhang float32) {
 	return clamp(lo, world), clamp(lo+length, world), 0
 }
 

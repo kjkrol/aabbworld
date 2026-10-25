@@ -26,7 +26,7 @@ func realSpace(b *testing.B, n int) (*aabbworld.Space, uid.UID64) {
 	items := []aabbworld.Item{{ID: observer, Box: plane.NewAABB(geom.NewVec(2000, 2000), 10, 10)}}
 	r := rand.New(rand.NewPCG(1, 2))
 	for i := range n {
-		items = append(items, aabbworld.Item{ID: uid.UID64(100 + i), Box: plane.NewAABB(geom.NewVec(float64(r.IntN(4000)), float64(r.IntN(4000))), 20, 20)})
+		items = append(items, aabbworld.Item{ID: uid.UID64(100 + i), Box: plane.NewAABB(geom.NewVec(float32(r.IntN(4000)), float32(r.IntN(4000))), 20, 20)})
 	}
 	space.Rebuild(items)
 	return space, observer
@@ -45,7 +45,7 @@ func Benchmark_View_Visible(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				if space.Scan(observer, viewCone, v) {
-					v.Entities(func(uid.UID64, float64) {})
+					v.Entities(func(uid.UID64, float32) {})
 				}
 			}
 		})
@@ -79,7 +79,7 @@ func Benchmark_View_Both(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				if space.Scan(observer, viewCone, v) {
-					v.Entities(func(uid.UID64, float64) {})
+					v.Entities(func(uid.UID64, float32) {})
 					fog = v.Outline(0, fog[:0])
 				}
 			}
@@ -106,7 +106,7 @@ func Benchmark_View_Depths(b *testing.B) {
 
 // Benchmark_View_Translucent is Benchmark_View_Both with three entities in ten see-through at τ = 0.5.
 func Benchmark_View_Translucent(b *testing.B) {
-	translucent := func(id uid.UID64) float64 {
+	translucent := func(id uid.UID64) float32 {
 		if id%10 < 3 {
 			return 0.5
 		}
@@ -122,7 +122,7 @@ func Benchmark_View_Translucent(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				if space.Scan(observer, cone, v) {
-					v.Entities(func(uid.UID64, float64) {})
+					v.Entities(func(uid.UID64, float32) {})
 					fog = v.Outline(0, fog[:0])
 				}
 			}
@@ -131,18 +131,20 @@ func Benchmark_View_Translucent(b *testing.B) {
 }
 
 // rolling is the ground of the elevated scene: a sine over the plane, 0 to 10.
-func rolling(p geom.Vec) float64 { return 5 + 5*math.Sin(p.X/90)*math.Cos(p.Y/70) }
+func rolling(p geom.Vec) float32 {
+	return float32(5 + 5*math.Sin(float64(p.X)/90)*math.Cos(float64(p.Y)/70))
+}
 
 // raster samples rolling once per 32-unit cell and answers by lookup, as an engine's heightfield would.
-func raster() func(geom.Vec) float64 {
+func raster() func(geom.Vec) float32 {
 	const cell, side = 32.0, 4000/32 + 1
-	grid := make([]float64, side*side)
+	grid := make([]float32, side*side)
 	for y := range side {
 		for x := range side {
-			grid[y*side+x] = rolling(geom.NewVec(float64(x)*cell, float64(y)*cell))
+			grid[y*side+x] = rolling(geom.NewVec(float32(x)*cell, float32(y)*cell))
 		}
 	}
-	return func(p geom.Vec) float64 {
+	return func(p geom.Vec) float32 {
 		x, y := int(p.X/cell), int(p.Y/cell)
 		if x < 0 || y < 0 || x >= side || y >= side {
 			return 0
@@ -157,13 +159,13 @@ func raster() func(geom.Vec) float64 {
 // every fifth entity flies at 30–34, every other stands to 2, the rest to 12.
 func Benchmark_View_Elevated(b *testing.B) {
 	base := viewCone
-	base.Transparency = func(id uid.UID64) float64 {
+	base.Transparency = func(id uid.UID64) float32 {
 		if id%10 < 3 {
 			return 0.5
 		}
 		return 0
 	}
-	bands := func(id uid.UID64) (float64, float64) {
+	bands := func(id uid.UID64) (float32, float32) {
 		switch {
 		case id%5 == 0:
 			return 30, 34
@@ -172,7 +174,7 @@ func Benchmark_View_Elevated(b *testing.B) {
 		}
 		return 0, 12
 	}
-	withHeights := func(ground func(geom.Vec) float64, step float64) aabbworld.Cone {
+	withHeights := func(ground func(geom.Vec) float32, step float32) aabbworld.Cone {
 		c := base
 		c.Eye, c.Elevation, c.Ground, c.GroundStep = 6, bands, ground, step
 		return c
@@ -183,7 +185,7 @@ func Benchmark_View_Elevated(b *testing.B) {
 	}{
 		{"none", base},
 		{"entities", withHeights(nil, 0)},
-		{"flat", withHeights(func(geom.Vec) float64 { return 5 }, 32)},
+		{"flat", withHeights(func(geom.Vec) float32 { return 5 }, 32)},
 		{"raster", withHeights(raster(), 32)},
 		{"raster-step50", withHeights(raster(), 0)},
 		{"sine", withHeights(rolling, 32)},
@@ -197,7 +199,7 @@ func Benchmark_View_Elevated(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					if space.Scan(observer, r.cone, v) {
-						v.Entities(func(uid.UID64, float64) {})
+						v.Entities(func(uid.UID64, float32) {})
 						fog = v.Outline(0, fog[:0])
 					}
 				}
@@ -210,7 +212,7 @@ func Benchmark_View_Elevated(b *testing.B) {
 // hidden ground (Shadows), on a plane and over the raster rung of Benchmark_View_Elevated.
 func Benchmark_View_Shadows(b *testing.B) {
 	flat := viewCone
-	flat.Transparency = func(id uid.UID64) float64 {
+	flat.Transparency = func(id uid.UID64) float32 {
 		if id%10 < 3 {
 			return 0.5
 		}
@@ -218,7 +220,7 @@ func Benchmark_View_Shadows(b *testing.B) {
 	}
 	high := flat
 	high.Eye, high.Ground, high.GroundStep = 6, raster(), 32
-	high.Elevation = func(id uid.UID64) (float64, float64) {
+	high.Elevation = func(id uid.UID64) (float32, float32) {
 		switch {
 		case id%5 == 0:
 			return 30, 34

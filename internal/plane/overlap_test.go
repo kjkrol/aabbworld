@@ -9,7 +9,7 @@ import (
 )
 
 // boxAt spells a box as position and size.
-func boxAt(x, y, w, h float64) geom.AABB {
+func boxAt(x, y, w, h float32) geom.AABB {
 	return geom.NewAABB(geom.NewVec(x, y), geom.NewVec(x+w, y+h))
 }
 
@@ -77,7 +77,7 @@ func TestDeepestOverlap_DeeperFragmentBeatsTheMainBoxes(t *testing.T) {
 	if got.BoxB.TopLeft.X != 0 {
 		t.Errorf("BoxB = %v, want b's wrapped part starting at x=0", got.BoxB)
 	}
-	if math.Abs(got.Penetration.X) <= 1 {
+	if math.Abs(float64(got.Penetration.X)) <= 1 {
 		t.Errorf("penetration %v across, want the fragment's deeper overlap rather than the main boxes' single unit", got.Penetration.X)
 	}
 }

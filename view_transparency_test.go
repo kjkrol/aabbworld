@@ -23,17 +23,17 @@ func TestScan_SeesThroughAForestAtTheCostOfReach(t *testing.T) {
 		{ID: forest, Box: plane.NewAABB(geom.NewVec(205, 55), 100, 100)},
 		{ID: tower, Box: plane.NewAABB(geom.NewVec(505, 100), 10, 10)},
 	})
-	sees := func(radius float64, transparency func(uid.UID64) float64) map[uid.UID64]bool {
+	sees := func(radius float32, transparency func(uid.UID64) float32) map[uid.UID64]bool {
 		var view aabbworld.View
 		cone := aabbworld.Cone{Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 8, Radius: radius, Transparency: transparency}
 		if !space.Scan(scout, cone, &view) {
 			t.Fatal("Scan refused")
 		}
 		got := map[uid.UID64]bool{}
-		view.Entities(func(id uid.UID64, _ float64) { got[id] = true })
+		view.Entities(func(id uid.UID64, _ float32) { got[id] = true })
 		return got
 	}
-	forestOnly := func(id uid.UID64) float64 {
+	forestOnly := func(id uid.UID64) float32 {
 		if id == forest {
 			return 0.5
 		}

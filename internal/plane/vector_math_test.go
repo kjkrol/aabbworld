@@ -35,11 +35,13 @@ func TestWrap(t *testing.T) {
 		"just below zero":          {geom.NewVec(-3, -1), geom.NewVec(1, 3)},
 		"far out, past the fast p": {geom.NewVec(19, -13), geom.NewVec(3, 3)},
 		"fractional wraps too":     {geom.NewVec(4.5, -0.5), geom.NewVec(0.5, 3.5)},
+		// -1e-7 + 4 rounds to 4 in float32, which is past the end of [0, 4).
+		"a hair below zero comes to zero": {geom.NewVec(-1e-7, -1e-7), geom.NewVec(0, 0)},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			got := Wrap(c.start, size)
-			if math.Abs(got.X-c.want.X) > 1e-12 || math.Abs(got.Y-c.want.Y) > 1e-12 {
+			if math.Abs(float64(got.X-c.want.X)) > 1e-12 || math.Abs(float64(got.Y-c.want.Y)) > 1e-12 {
 				t.Errorf("Wrap(%v) = %v, want %v", c.start, got, c.want)
 			}
 		})

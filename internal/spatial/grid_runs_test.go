@@ -12,7 +12,7 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-// record is an entity as an ECS keeps it in a column: its box first, its capability at 100.
+// record is an entity as an ECS keeps it in a column: its box first, its capability at 68.
 type record struct {
 	box  plane.AABB
 	_    [36]byte
@@ -44,13 +44,13 @@ func TestGrid_OverRunsAnswersAsOverItems(t *testing.T) {
 	for name, edges := range map[string]iplane.Edges{"closed": 0, "torus": iplane.Torus} {
 		t.Run(name, func(t *testing.T) {
 			rng := rand.New(rand.NewPCG(9, 4))
-			sc := newScene(t, edges, rng, 500, []float64{4, 16, 60})
+			sc := newScene(t, edges, rng, 500, []float32{4, 16, 60})
 			byRuns := NewGrid(sc.surface, Size1024x1024, Size16x16)
 			runs, tail := runsOver(sc.items)
 			byRuns.RebuildRuns(runs, tail)
 
 			for q := range 30 {
-				box := geom.NewAABBAt(geom.NewVec(rng.Float64()*1000, rng.Float64()*1000), 90, 60)
+				box := geom.NewAABBAt(geom.NewVec(float32(rng.Float64()*1000), float32(rng.Float64()*1000)), 90, 60)
 				var want, got []uid.UID64
 				sc.grid.Query(box, collides, func(id uid.UID64) { want = append(want, id) })
 				byRuns.Query(box, collides, func(id uid.UID64) { got = append(got, id) })

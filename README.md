@@ -57,7 +57,7 @@ go get github.com/kjkrol/aabbworld
 ```
 
 Optionally, build with `GOEXPERIMENT=simd`: on amd64 with AVX2, the collision tick then tests the
-boxes of a crowded cell four at a time, with the same results (see [Performance](#performance)).
+boxes of a crowded cell eight at a time, with the same results (see [Performance](#performance)).
 
 <a id="features"></a>
 # ✨ Key Features
@@ -138,7 +138,7 @@ func main() {
 	var view aabbworld.View
 	cone := aabbworld.Cone{Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 8, Radius: 60}
 	if space.Scan(1, cone, &view) {
-		view.Entities(func(id uid.UID64, dist float64) { fmt.Printf("1 sees %d at distance %.0f\n", id, dist) })
+		view.Entities(func(id uid.UID64, dist float32) { fmt.Printf("1 sees %d at distance %.0f\n", id, dist) })
 	}
 }
 ```
@@ -239,20 +239,20 @@ geom ──► plane ──► internal/plane ──► internal/spatial ──�
 <a id="performance"></a>
 # ⏱️ Performance
 
-Measured on an Intel i5-8265U (see [BENCHMARKS.md](BENCHMARKS.md#environment)); every path below
-reports 0 allocs/op.
+Measured on an Intel i5-8265U with the float32 boxes of v1.17.0 (see
+[BENCHMARKS.md](BENCHMARKS.md#environment)); every path below reports 0 allocs/op.
 
 | Operation | Scene | Cost |
 |:---|:---|---:|
-| Collision tick (pair, ask, separate) | 8,388 boxes, 10×10 each, covering 20% of a 2048×2048 torus | 1.78 ms |
-| Collision tick | 33,554 boxes, 5×5 each, covering 20% of the same torus | 8.6 ms |
-| Collision tick, crowded cells | 12,000 boxes 8×8 and 20 of 100×100, 256-unit buckets | 6.95 ms; 3.10 ms with `GOEXPERIMENT=simd` |
-| Rebuild + pairs + 8 queries | 8,388 boxes, 5×5 each, on a 1024×1024 torus | 1.23 ms |
-| Solve confirmed pairs | 13,547 candidate pairs, 3,763 contacts | 4.25 ms |
-| Scan a 90° cone and list what it sees | 1,000 entities in sight range | 26.7 µs |
-| Scan a 90° cone through see-through entities, list and outline | 1,000 entities, 3 in 10 at τ = 0.5 | 32.4 µs |
-| The same scan with heights over a 32-unit heightfield | 1,000 entities, 3 in 10 at τ = 0.5, ground sampled every 32 | 112 µs (3.2× the scan without heights) |
-| Fold a box across the far corner (`WrapAABB`) | torus | 31 ns |
+| Collision tick (pair, ask, separate) | 8,388 boxes, 10×10 each, covering 20% of a 2048×2048 torus | 1.69 ms |
+| Collision tick | 33,554 boxes, 5×5 each, covering 20% of the same torus | 7.5 ms |
+| Collision tick, crowded cells | 12,000 boxes 8×8 and 20 of 100×100, 256-unit buckets | 7.30 ms; 2.32 ms with `GOEXPERIMENT=simd` |
+| Rebuild + pairs + 8 queries | 8,388 boxes, 5×5 each, on a 1024×1024 torus | 1.12 ms |
+| Solve confirmed pairs | 13,547 candidate pairs, 3,763 contacts | 2.78 ms |
+| Scan a 90° cone and list what it sees | 1,000 entities in sight range | 26.4 µs |
+| Scan a 90° cone through see-through entities, list and outline | 1,000 entities, 3 in 10 at τ = 0.5 | 32.8 µs |
+| The same scan with heights over a 32-unit heightfield | 1,000 entities, 3 in 10 at τ = 0.5, ground sampled every 32 | 102 µs (3.1× the scan without heights) |
+| Fold a box across the far corner (`WrapAABB`) | torus | 13 ns |
 
 > **Deep dive**: per-scene tables, what each benchmark measures, and what the numbers taught us
 > (why the index keeps two layouts, why `Rebuild` is lazy) are in [**BENCHMARKS.md**](BENCHMARKS.md).

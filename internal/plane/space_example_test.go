@@ -17,7 +17,7 @@ func ExampleNewEuclidean2D_normalizeVec_int() {
 	// Output: (8,9)
 }
 
-func ExampleNewEuclidean2D_normalizeVec_float64() {
+func ExampleNewEuclidean2D_normalizeVec_float32() {
 	euclidean := NewEuclidean2D(10.0, 10.0)
 	vec := geom.NewVec(5., 5)
 	delta := geom.NewVec(3., 4)
@@ -38,7 +38,7 @@ func ExampleNewToroidal2D_normalizeVec_int() {
 	// Output: (2,3)
 }
 
-func ExampleNewToroidal2D_normalizeVec_float64() {
+func ExampleNewToroidal2D_normalizeVec_float32() {
 	toroidal := NewToroidal2D(10.0, 10.0)
 	vec := geom.NewVec(9., 9)
 	delta := geom.NewVec(3., 4)

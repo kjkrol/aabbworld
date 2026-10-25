@@ -23,19 +23,19 @@ func TestScan_SightHasHeights(t *testing.T) {
 		{ID: wall, Box: plane.NewAABB(geom.NewVec(305, 55), 10, 100)},
 		{ID: walker, Box: plane.NewAABB(geom.NewVec(505, 100), 10, 10)},
 	})
-	heights := map[uid.UID64][2]float64{wall: {0, 10}, walker: {0, 2}}
-	sees := func(eye float64) map[uid.UID64]bool {
+	heights := map[uid.UID64][2]float32{wall: {0, 10}, walker: {0, 2}}
+	sees := func(eye float32) map[uid.UID64]bool {
 		var view aabbworld.View
 		cone := aabbworld.Cone{
 			Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 8, Radius: 600,
 			Eye:       eye,
-			Elevation: func(id uid.UID64) (float64, float64) { return heights[id][0], heights[id][1] },
+			Elevation: func(id uid.UID64) (float32, float32) { return heights[id][0], heights[id][1] },
 		}
 		if !space.Scan(scout, cone, &view) {
 			t.Fatal("Scan refused")
 		}
 		got := map[uid.UID64]bool{}
-		view.Entities(func(id uid.UID64, _ float64) { got[id] = true })
+		view.Entities(func(id uid.UID64, _ float32) { got[id] = true })
 		return got
 	}
 

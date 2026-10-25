@@ -121,16 +121,18 @@ func (p *fieldPass) settle(cell uint64, push geom.Vec) {
 // on, or past a free end along it when that is shorter; false when they do not overlap — touching
 // is not overlapping. It tests the four axes that can part them: x, y, the wall's and across it.
 func wallPush(a geom.AABB, w pcollide.FieldWall) (geom.Vec, bool) {
-	ex, ey := (a.BottomRight.X-a.TopLeft.X)/2, (a.BottomRight.Y-a.TopLeft.Y)/2
-	vx, vy := w.B.X-w.A.X, w.B.Y-w.A.Y
+	x1, y1 := float64(a.TopLeft.X), float64(a.TopLeft.Y)
+	ex, ey := (float64(a.BottomRight.X)-x1)/2, (float64(a.BottomRight.Y)-y1)/2
+	ax, ay, bx, by := float64(w.A.X), float64(w.A.Y), float64(w.B.X), float64(w.B.Y)
+	vx, vy := bx-ax, by-ay
 	length := math.Hypot(vx, vy)
 	dx, dy := 1.0, 0.0
 	if length > 0 {
 		dx, dy = vx/length, vy/length
 	}
 	nx, ny := -dy, dx
-	half, h := length/2, w.Half
-	cx, cy := a.TopLeft.X+ex-(w.A.X+w.B.X)/2, a.TopLeft.Y+ey-(w.A.Y+w.B.Y)/2
+	half, h := length/2, float64(w.Half)
+	cx, cy := x1+ex-(ax+bx)/2, y1+ey-(ay+by)/2
 	alongX := ex + half*math.Abs(dx) + h*math.Abs(nx) - math.Abs(cx)
 	alongY := ey + half*math.Abs(dy) + h*math.Abs(ny) - math.Abs(cy)
 	s, t := cx*nx+cy*ny, cx*dx+cy*dy
@@ -147,9 +149,9 @@ func wallPush(a geom.AABB, w pcollide.FieldWall) (geom.Vec, bool) {
 		end, way = pcollide.EndB, 1
 	}
 	if w.Open&end != 0 && along < across {
-		return geom.NewVec(way*along*dx, way*along*dy), true
+		return geom.NewVec(float32(way*along*dx), float32(way*along*dy)), true
 	}
-	return geom.NewVec(side*across*nx, side*across*ny), true
+	return geom.NewVec(float32(side*across*nx), float32(side*across*ny)), true
 }
 
 // pushOut is the shortest way out of b for a through one of b's open sides; with none open, the
@@ -158,7 +160,7 @@ func pushOut(a, b geom.AABB, open pcollide.Sides) geom.Vec {
 	ways := [4]struct {
 		side pcollide.Sides
 		v    geom.Vec
-		d    float64
+		d    float32
 	}{
 		{pcollide.Left, geom.NewVec(b.TopLeft.X-a.BottomRight.X, 0), a.BottomRight.X - b.TopLeft.X},
 		{pcollide.Right, geom.NewVec(b.BottomRight.X-a.TopLeft.X, 0), b.BottomRight.X - a.TopLeft.X},

@@ -4,7 +4,6 @@ import (
 	"math"
 	"slices"
 
-	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/uid"
 )
 
@@ -30,7 +29,7 @@ type event struct {
 const arcStep = math.Pi / 90 // two degrees
 
 // sweep records what the view meets at every angle where the reach can change shape.
-func sweep(origin geom.Vec, coneDir, halfAngle, radius float64, cands []candidate, elev *elevation, sc *scratch) []sample {
+func sweep(origin vec, coneDir, halfAngle, radius float64, cands []candidate, elev *elevation, sc *scratch) []sample {
 	eps := math.Atan2(1, radius)
 
 	angles := sc.angles
@@ -87,7 +86,7 @@ func sweep(origin geom.Vec, coneDir, halfAngle, radius float64, cands []candidat
 // walk casts along ascending angles, one sample each, skipping any within minGap of the last;
 // with mark the casts note on each candidate where they saw it.
 func walk(
-	origin geom.Vec,
+	origin vec,
 	coneDir, radius, minGap float64,
 	angles []float64,
 	events []event,
@@ -142,7 +141,7 @@ const maxRefine = 8
 
 // caster casts along one angle with what a walk has at hand: the active candidates and the cover.
 type caster struct {
-	origin  geom.Vec
+	origin  vec
 	coneDir float64
 	radius  float64
 	cands   []candidate
@@ -190,9 +189,9 @@ type crossing struct {
 
 // castFlat follows one angle on a plane: the nearest blocking candidate is the wall, see-through
 // ones eat the budget. The sample is a hit only when the wall is reached before the budget runs out.
-func castFlat(origin geom.Vec, coneDir, rel, radius float64, cands []candidate, active []int, sc *scratch, mark bool) sample {
+func castFlat(origin vec, coneDir, rel, radius float64, cands []candidate, active []int, sc *scratch, mark bool) sample {
 	abs := coneDir + rel
-	dir := geom.NewVec(math.Cos(abs), math.Sin(abs))
+	dir := vec{math.Cos(abs), math.Sin(abs)}.round32()
 	cross := &sc.crossings
 
 	best, wall := sample{angle: rel, dist: radius}, noCut
@@ -239,7 +238,7 @@ func castFlat(origin geom.Vec, coneDir, rel, radius float64, cands []candidate, 
 
 // castCover walks the cover along a flat cast up to its wall so far: a blocking stretch nearer
 // becomes the wall, see-through ones join the crossings; it returns how many crossings there are.
-func castCover(origin, dir geom.Vec, radius float64, best *sample, wall *int, crossed int, sc *scratch) int {
+func castCover(origin, dir vec, radius float64, best *sample, wall *int, crossed int, sc *scratch) int {
 	budget := 0.0
 	if crossed == 0 {
 		budget = radius // only the cover spends it, so the walk may stop where it runs out

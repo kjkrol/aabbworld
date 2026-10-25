@@ -25,11 +25,11 @@ func newSolverBatch(cols, rows int) *solverBatch {
 	b := &solverBatch{}
 	for r := range rows {
 		for c := range cols {
-			x := float64(c) * 12
+			x := float32(c) * 12
 			if (r*cols+c)%25 == 0 {
 				x += 4
 			}
-			b.home = append(b.home, plane.NewAABB(geom.NewVec(x, float64(r)*12), 10, 10))
+			b.home = append(b.home, plane.NewAABB(geom.NewVec(x, float32(r)*12), 10, 10))
 		}
 	}
 	for r := range rows {
@@ -90,7 +90,7 @@ func newDenseScene(n int) *denseScene {
 	surface := iplane.NewToroidal2D(1024, 1024)
 	sc := &denseScene{surface: surface}
 	for i := range n {
-		box := plane.NewAABB(geom.NewVec(rng.Float64()*1024, rng.Float64()*1024), 5, 5)
+		box := plane.NewAABB(geom.NewVec(float32(rng.Float64()*1024), float32(rng.Float64()*1024)), 5, 5)
 		surface.Translate(&box, geom.Vec{})
 		sc.home = append(sc.home, spatial.Item{ID: uid.UID64(i + 1), Box: box, Caps: spatial.CanCollide})
 	}

@@ -13,18 +13,18 @@ import (
 // Ground are in the package doc.
 type Cone struct {
 	Direction geom.Vec
-	HalfAngle float64 // below π
-	Radius    float64
+	HalfAngle float32 // below π
+	Radius    float32
 	// Transparency is τ per entity: 1 as empty, 0.5 costs twice its depth, ≤ 0 blocks; nil blocks all.
-	Transparency func(id uid.UID64) float64
+	Transparency func(id uid.UID64) float32
 	// Eye is the height the observer looks from; it matters once Elevation or Ground is set.
-	Eye float64
+	Eye float32
 	// Elevation is the bottom and top of each entity; nil spans every entity over all heights.
-	Elevation func(id uid.UID64) (bottom, top float64)
+	Elevation func(id uid.UID64) (bottom, top float32)
 	// Ground is the height of the ground at a point, sampled every GroundStep along a ray (0: a
 	// sixteenth of Radius); nil is flat ground at 0.
-	Ground     func(p geom.Vec) float64
-	GroundStep float64
+	Ground     func(p geom.Vec) float32
+	GroundStep float32
 	// Profile is the ground along each ray, exactly, in place of Ground sampled every GroundStep:
 	// the points where its slope changes; Ground still stands a box on the ground. nil: none.
 	Profile ProfileField
@@ -58,7 +58,7 @@ type View struct {
 }
 
 // Entities calls fn for every entity in view, nearest first, and returns how many.
-func (v *View) Entities(fn func(id uid.UID64, dist float64)) int { return v.impl.Entities(fn) }
+func (v *View) Entities(fn func(id uid.UID64, dist float32)) int { return v.impl.Entities(fn) }
 
 // Depths appends to dst the reach at k ≥ 2 angles evenly spaced across the cone.
 func (v *View) Depths(k int, dst []float32) []float32 { return v.impl.Depths(k, dst) }
@@ -82,7 +82,7 @@ func (v *View) Shadows(k int, dst []Shadow) []Shadow {
 }
 
 // Outline appends the lit region to dst as a fan from the observer; maxArcStep 0 picks a default.
-func (v *View) Outline(maxArcStep float64, dst []geom.Vec) []geom.Vec {
+func (v *View) Outline(maxArcStep float32, dst []geom.Vec) []geom.Vec {
 	return v.impl.Outline(maxArcStep, dst)
 }
 

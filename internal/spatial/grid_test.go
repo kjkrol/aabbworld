@@ -21,13 +21,13 @@ type scene struct {
 	items   []Item
 }
 
-func newScene(t testing.TB, edges iplane.Edges, rng *rand.Rand, count int, sides []float64) *scene {
+func newScene(t testing.TB, edges iplane.Edges, rng *rand.Rand, count int, sides []float32) *scene {
 	t.Helper()
 	surface := iplane.NewSurface(1024, 1024, edges)
 	sc := &scene{surface: surface, grid: NewGrid(surface, Size1024x1024, Size16x16)}
 	for i := range count {
 		w, h := sides[rng.IntN(len(sides))], sides[rng.IntN(len(sides))]
-		box := plane.NewAABB(geom.NewVec(rng.Float64()*1024-w/2, rng.Float64()*1024-h/2), w, h)
+		box := plane.NewAABB(geom.NewVec(float32(rng.Float64()*1024)-w/2, float32(rng.Float64()*1024)-h/2), w, h)
 		surface.Translate(&box, geom.Vec{})
 		if surface.Left(&box) {
 			continue
@@ -48,7 +48,7 @@ func (sc *scene) step(rng *rand.Rand) {
 	for i := range sc.items {
 		it := &sc.items[i]
 		side := min(it.Box.Size.X, it.Box.Size.Y)
-		sc.surface.Translate(&it.Box, geom.NewVec((rng.Float64()*2-1)*side/2, (rng.Float64()*2-1)*side/2))
+		sc.surface.Translate(&it.Box, geom.NewVec(float32(rng.Float64()*2-1)*side/2, float32(rng.Float64()*2-1)*side/2))
 		if !sc.surface.Left(&it.Box) {
 			kept = append(kept, *it)
 		}
@@ -86,11 +86,11 @@ func TestGrid_AgreesWithBruteForce(t *testing.T) {
 	for name, edges := range map[string]iplane.Edges{"closed": 0, "torus": iplane.Torus, "wrapX openY": iplane.WrapX | iplane.OpenY} {
 		t.Run(name, func(t *testing.T) {
 			rng := rand.New(rand.NewPCG(7, 11))
-			sc := newScene(t, edges, rng, 600, []float64{4, 5, 16, 60})
+			sc := newScene(t, edges, rng, 600, []float32{4, 5, 16, 60})
 			for round := range 40 {
 				for q := range 30 {
-					w, h := 8+rng.Float64()*120, 8+rng.Float64()*120
-					box := sc.surface.WrapAABB(geom.NewAABBAt(geom.NewVec(rng.Float64()*1024-20, rng.Float64()*1024-20), w, h))
+					w, h := 8+float32(rng.Float64()*120), 8+float32(rng.Float64()*120)
+					box := sc.surface.WrapAABB(geom.NewAABBAt(geom.NewVec(float32(rng.Float64()*1024)-20, float32(rng.Float64()*1024)-20), w, h))
 					want := collides
 					if rng.IntN(2) == 0 {
 						want = AnyCapability
@@ -184,15 +184,15 @@ func TestGrid_RefusesCoordinatesWithNoCell(t *testing.T) {
 	g := NewGrid(iplane.NewEuclidean2D(256, 256), Size256x256, Size32x32)
 	for name, v := range map[string]geom.Vec{
 		"negative":          geom.NewVec(-5, -5),
-		"NaN":               geom.NewVec(math.NaN(), 10),
-		"beyond the grid":   geom.NewVec(1e9, 10),
-		"positive infinity": geom.NewVec(math.Inf(1), 10),
+		"NaN":               geom.NewVec(float32(math.NaN()), 10),
+		"beyond the grid":   geom.NewVec(1e7, 10),
+		"positive infinity": geom.NewVec(float32(math.Inf(1)), 10),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if c := g.cellOf(v.X); c != 0 && c != g.side-1 {
 				t.Errorf("cellOf(%v) = %d, want it held at an edge cell", v.X, c)
 			}
-			if _, ok := g.clamp(geom.NewAABBAt(v, 4, 4)); ok && (v.X < 0 || math.IsNaN(v.X)) {
+			if _, ok := g.clamp(geom.NewAABBAt(v, 4, 4)); ok && (v.X < 0 || math.IsNaN(float64(v.X))) {
 				box, _ := g.clamp(geom.NewAABBAt(v, 4, 4))
 				if box.TopLeft.X != 0 {
 					t.Errorf("clamp put a box with no cell at %v", box)
@@ -245,7 +245,7 @@ func count(g *Grid, box geom.AABB, want Capability) int {
 }
 
 // pairsOf is how many pairs Pairs reports for reach and want.
-func pairsOf(g *Grid, reach float64, want Capability) int {
+func pairsOf(g *Grid, reach float32, want Capability) int {
 	n := 0
 	g.Pairs(reach, want, func(int32, int32) { n++ })
 	return n
@@ -320,7 +320,7 @@ func TestGrid_PairsWithANewReachReindexes(t *testing.T) {
 }
 
 // near is every pair Pairs owes, worked out by comparing every two grown boxes, images and all.
-func (sc *scene) near(reach float64, want Capability) []idPair {
+func (sc *scene) near(reach float32, want Capability) []idPair {
 	grown := make([]plane.AABB, len(sc.items))
 	for i, it := range sc.items {
 		grown[i] = it.Box

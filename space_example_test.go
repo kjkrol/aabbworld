@@ -59,7 +59,7 @@ func ExampleSpace() {
 	var view aabbworld.View
 	cone := aabbworld.Cone{Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 8, Radius: 60}
 	if space.Scan(1, cone, &view) {
-		view.Entities(func(id uid.UID64, dist float64) { fmt.Printf("1 sees %d at distance %.0f\n", id, dist) })
+		view.Entities(func(id uid.UID64, dist float32) { fmt.Printf("1 sees %d at distance %.0f\n", id, dist) })
 	}
 	// Output:
 	// contact 1-2, penetration (-2,0)

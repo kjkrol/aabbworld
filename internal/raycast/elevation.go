@@ -12,14 +12,14 @@ import (
 // itself: how far along it lies (d, above 0) and the ground's height there. visit returning false
 // ends the walk. A wrapping world's owner folds the ray onto the world itself.
 type ProfileField interface {
-	Along(origin, dir geom.Vec, length float64, visit func(d, alt float64) bool)
+	Along(origin, dir geom.Vec, length float32, visit func(d, alt float32) bool)
 }
 
 // elevation is what a cast needs beyond the plane when the cone has heights: the eye, the ground
 // and how far apart the ground is sampled along a ray, or its profile.
 type elevation struct {
 	eye     float64
-	ground  func(geom.Vec) float64 // nil: flat at 0
+	ground  func(geom.Vec) float32 // nil: flat at 0
 	profile ProfileField           // nil: the ground sampled every step
 	step    float64
 	w, h    float64 // wrap sizes, 0 where the axis does not wrap
@@ -29,7 +29,7 @@ type elevation struct {
 type profileWalk struct {
 	d, alt []float64
 	length float64
-	visit  func(d, alt float64) bool
+	visit  func(d, alt float32) bool
 }
 
 // take records one point of the profile and says whether the walk goes on.
@@ -44,13 +44,13 @@ func (w *profileWalk) take(d, alt float64) bool {
 
 // walkProfile gathers the ground along one ray into sc.profile, ending at length: from the ground
 // there, or the profile's last height, where the profile stops short of it.
-func (sc *scratch) walkProfile(e *elevation, origin, dir geom.Vec, length float64) {
+func (sc *scratch) walkProfile(e *elevation, origin, dir vec, length float64) {
 	w := &sc.profile
 	w.d, w.alt, w.length = w.d[:0], w.alt[:0], length
 	if w.visit == nil {
-		w.visit = w.take
+		w.visit = func(d, alt float32) bool { return w.take(float64(d), float64(alt)) }
 	}
-	e.profile.Along(origin, dir, length, w.visit)
+	e.profile.Along(origin.vec32(), dir.vec32(), float32(length), w.visit)
 	if n := len(w.d); n == 0 || w.d[n-1] < length {
 		alt := 0.0
 		switch {
@@ -64,28 +64,37 @@ func (sc *scratch) walkProfile(e *elevation, origin, dir geom.Vec, length float6
 }
 
 // at is the ground height under the point dist along the ray, folded back onto a wrapping world.
-func (e *elevation) at(origin, dir geom.Vec, dist float64) float64 {
+func (e *elevation) at(origin, dir vec, dist float64) float64 {
 	if e.ground == nil {
 		return 0
 	}
-	p := geom.NewVec(origin.X+dir.X*dist, origin.Y+dir.Y*dist)
+	x, y := origin.x+dir.x*dist, origin.y+dir.y*dist
+	p := geom.NewVec(float32(x), float32(y))
 	if e.w > 0 {
-		if p.X = math.Mod(p.X, e.w); p.X < 0 {
-			p.X += e.w
-		}
+		p.X = fold(x, e.w)
 	}
 	if e.h > 0 {
-		if p.Y = math.Mod(p.Y, e.h); p.Y < 0 {
-			p.Y += e.h
-		}
+		p.Y = fold(y, e.h)
 	}
-	return e.ground(p)
+	return float64(e.ground(p))
+}
+
+// fold is v folded into [0, size) as a float32: a hair below size goes to 0, where rounding would
+// have put it on size itself.
+func fold(v, size float64) float32 {
+	if v = math.Mod(v, size); v < 0 {
+		v += size
+	}
+	if f := float32(v); f < float32(size) {
+		return f
+	}
+	return 0
 }
 
 // ray is one elevated cast in progress: the crossings entered so far are its blockers, horizon the
 // steepest sightline to the ground yet, reach the farthest lit ground and cut the wall it ends at.
 type ray struct {
-	origin, dir geom.Vec
+	origin, dir vec
 	radius      float64
 	cands       []candidate
 	cross       []crossing
@@ -103,9 +112,9 @@ type ray struct {
 // castElevated follows one angle with heights: an entry is seen when the sightline to its top
 // clears the ground and every nearer blocking box within the budget; the reach is the farthest
 // lit ground, a standing box's foot included.
-func castElevated(origin geom.Vec, coneDir, rel, radius float64, cands []candidate, active []int, e *elevation, sc *scratch, mark bool) sample {
+func castElevated(origin vec, coneDir, rel, radius float64, cands []candidate, active []int, e *elevation, sc *scratch, mark bool) sample {
 	abs := coneDir + rel
-	dir := geom.NewVec(math.Cos(abs), math.Sin(abs))
+	dir := vec{math.Cos(abs), math.Sin(abs)}.round32()
 
 	cross := sc.crossings[:0]
 	for _, i := range active {

@@ -19,7 +19,7 @@ type Handler interface {
 // Config is how far an Engine looks for pairs and how long it spends separating them.
 type Config struct {
 	// Reach is how far a box may travel in a tick, as a fraction of its shorter side.
-	Reach float64
+	Reach float32
 	// Iterations caps the passes one Tick spends on chained overlaps.
 	Iterations int
 	// Field is the solid ground the Engine pushes movable boxes out of in the same passes as the

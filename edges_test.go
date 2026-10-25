@@ -239,7 +239,7 @@ func TestScan_SeesThroughAWrappingSeamOnly(t *testing.T) {
 				t.Fatal("Scan refused")
 			}
 			seen := false
-			view.Entities(func(id uid.UID64, _ float64) { seen = seen || id == target })
+			view.Entities(func(id uid.UID64, _ float32) { seen = seen || id == target })
 			if seen != tc.wantSeen {
 				t.Errorf("target seen = %v, want %v", seen, tc.wantSeen)
 			}
@@ -268,7 +268,7 @@ func TestScan_DoesNotAllocateOnceWarmUnderEveryEdgeRule(t *testing.T) {
 		depths := make([]float32, 0, 33)
 		scan := func() {
 			w.space.Scan(observer, cone, &view)
-			view.Entities(func(uid.UID64, float64) {})
+			view.Entities(func(uid.UID64, float32) {})
 			depths = view.Depths(33, depths[:0])
 		}
 		scan()

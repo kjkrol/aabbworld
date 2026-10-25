@@ -18,7 +18,7 @@ var (
 )
 
 // afterPush is where a 10-long box at 50 of a 100-long axis ends up, pushed by delta under rule.
-func afterPush(rule string, delta float64) (lo, hi, overhang float64) {
+func afterPush(rule string, delta float32) (lo, hi, overhang float32) {
 	lo = 50 + delta
 	switch rule {
 	case "closed":
@@ -38,7 +38,7 @@ func afterPush(rule string, delta float64) (lo, hi, overhang float64) {
 }
 
 func TestSurface_EachAxisFollowsItsOwnRule(t *testing.T) {
-	pushes := []float64{-57, -45, -3, 0, 3, 44, 47, 120}
+	pushes := []float32{-57, -45, -3, 0, 3, 44, 47, 120}
 	for _, rx := range rulesX {
 		for _, ry := range rulesY {
 			s := NewSurface(100, 100, rx.wrap|rx.open|ry.wrap|ry.open)

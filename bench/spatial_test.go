@@ -20,12 +20,12 @@ type gridScene struct {
 
 // newGridScene scatters count boxes of the given sides over a 1024x1024 torus, two in three of
 // them CanCollide, the same way the spatial package's own tests do.
-func newGridScene(rng *rand.Rand, count int, sides []float64) *gridScene {
+func newGridScene(rng *rand.Rand, count int, sides []float32) *gridScene {
 	surface := iplane.NewSurface(1024, 1024, iplane.Torus)
 	sc := &gridScene{surface: surface, grid: spatial.NewGrid(surface, spatial.Size1024x1024, spatial.Size16x16)}
 	for i := range count {
 		w, h := sides[rng.IntN(len(sides))], sides[rng.IntN(len(sides))]
-		box := plane.NewAABB(geom.NewVec(rng.Float64()*1024-w/2, rng.Float64()*1024-h/2), w, h)
+		box := plane.NewAABB(geom.NewVec(float32(rng.Float64()*1024)-w/2, float32(rng.Float64()*1024)-h/2), w, h)
 		surface.Translate(&box, geom.Vec{})
 		if surface.Left(&box) {
 			continue
@@ -46,11 +46,11 @@ func Benchmark_Grid_RebuildPairsQuery(b *testing.B) {
 	for _, cfg := range []struct {
 		name  string
 		n     int
-		sides []float64
+		sides []float32
 	}{
-		{"n=2000,5x5", 2000, []float64{5}},
-		{"n=8388,5x5", 8388, []float64{5}},
-		{"n=8388,mixed", 8388, []float64{4, 5, 16, 60}},
+		{"n=2000,5x5", 2000, []float32{5}},
+		{"n=8388,5x5", 8388, []float32{5}},
+		{"n=8388,mixed", 8388, []float32{4, 5, 16, 60}},
 	} {
 		b.Run(cfg.name, func(b *testing.B) {
 			rng := rand.New(rand.NewPCG(3, 5))
@@ -58,11 +58,11 @@ func Benchmark_Grid_RebuildPairsQuery(b *testing.B) {
 			deltas := make([]geom.Vec, len(sc.items))
 			for i, it := range sc.items {
 				side := min(it.Box.Size.X, it.Box.Size.Y)
-				deltas[i] = geom.NewVec((rng.Float64()*2-1)*side/2, (rng.Float64()*2-1)*side/2)
+				deltas[i] = geom.NewVec(float32(rng.Float64()*2-1)*side/2, float32(rng.Float64()*2-1)*side/2)
 			}
 			var probes []geom.AABB
 			for range 8 {
-				probes = append(probes, geom.NewAABBAt(geom.NewVec(rng.Float64()*900, rng.Float64()*900), 100, 100))
+				probes = append(probes, geom.NewAABBAt(geom.NewVec(float32(rng.Float64()*900), float32(rng.Float64()*900)), 100, 100))
 			}
 			pairs, found := 0, 0
 			onPair := func(_, _ int32) { pairs++ }

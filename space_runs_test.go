@@ -18,7 +18,7 @@ import (
 // untouched is what a push must leave of a record besides its box.
 var untouched = record{Vel: [4]float64{1, 2, 3, 4}, Kind: 77}
 
-func at(x, y float64, caps aabbworld.Capability) record {
+func at(x, y float32, caps aabbworld.Capability) record {
 	r := untouched
 	r.Box, r.Caps = plane.NewAABB(geom.NewVec(x, y), 10, 10), caps
 	return r
@@ -108,11 +108,11 @@ func TestQueryAndScan_SeeRunsAsTheyDoItems(t *testing.T) {
 	rng := rand.New(rand.NewPCG(5, 8))
 	for _, edges := range []aabbworld.Edges{0, aabbworld.Torus} {
 		c := newCrowd(t, 1000, 800, edges)
-		c.scatter(rng, 400, []float64{4, 16, 60}, false)
+		c.scatter(rng, 400, []float32{4, 16, 60}, false)
 		var probes []geom.AABB
 		for range 40 {
-			x, y := rng.Float64()*1000, rng.Float64()*800
-			probes = append(probes, geom.NewAABBAt(geom.NewVec(x, y), 20+rng.Float64()*200, 30))
+			x, y := float32(rng.Float64()*1000), float32(rng.Float64()*800)
+			probes = append(probes, geom.NewAABBAt(geom.NewVec(x, y), 20+float32(rng.Float64()*200), 30))
 		}
 		cone := aabbworld.Cone{Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 3, Radius: 300}
 
@@ -133,7 +133,7 @@ func TestQueryAndScan_SeeRunsAsTheyDoItems(t *testing.T) {
 					got = append(got, observer)
 					continue
 				}
-				view.Entities(func(id uid.UID64, _ float64) { hear(id) })
+				view.Entities(func(id uid.UID64, _ float32) { hear(id) })
 			}
 			if e == byItems {
 				heard = got
@@ -171,8 +171,8 @@ func TestRebuildRuns_ForgetsWhatTheLastOneLeftOut(t *testing.T) {
 func TestRunOf_ReadsTheOffsetsOfTheRow(t *testing.T) {
 	records := []record{at(1, 2, aabbworld.Sensor), at(3, 4, aabbworld.Static)}
 	r := aabbworld.RunOf([]uid.UID64{7, 8}, records, recordBox, recordCaps)
-	if r.Stride != 104 || r.BoxOff != 0 || r.CapsOff != 100 || len(r.IDs) != 2 {
-		t.Errorf("RunOf = stride %d, box at %d, caps at %d, %d ids; want 104, 0, 100, 2",
+	if r.Stride != 72 || r.BoxOff != 0 || r.CapsOff != 68 || len(r.IDs) != 2 {
+		t.Errorf("RunOf = stride %d, box at %d, caps at %d, %d ids; want 72, 0, 68, 2",
 			r.Stride, r.BoxOff, r.CapsOff, len(r.IDs))
 	}
 	if empty := aabbworld.RunOf(nil, []record{}, recordBox, recordCaps); len(empty.IDs) != 0 ||
@@ -188,7 +188,7 @@ func TestRunOf_RefusesWhatIsNotARunOfTheRows(t *testing.T) {
 	type small struct {
 		id   uint64
 		caps aabbworld.Capability
-		_    [55]byte
+		_    [23]byte
 	}
 	for name, build := range map[string]func(){
 		"more ids than rows": func() {
@@ -226,7 +226,7 @@ func TestRebuildRuns_QueryAndTickDoNotAllocateOnceWarm(t *testing.T) {
 	var records []record
 	var ids []uid.UID64
 	for i := range 600 {
-		records = append(records, at(rng.Float64()*1000, rng.Float64()*1000, aabbworld.CanCollide))
+		records = append(records, at(float32(rng.Float64()*1000), float32(rng.Float64()*1000), aabbworld.CanCollide))
 		ids = append(ids, uid.UID64(i+1))
 	}
 	engine := space.CollideEngine(&hooks{}, collide.Config{Reach: 0.5, Iterations: 8})
@@ -257,7 +257,7 @@ func TestScan_AfterAQueryGoroutinesScanAtOnce(t *testing.T) {
 	rng := rand.New(rand.NewPCG(3, 9))
 	for _, e := range entries {
 		c := newCrowd(t, 1000, 800, 0)
-		c.scatter(rng, 400, []float64{4, 16, 60}, false)
+		c.scatter(rng, 400, []float32{4, 16, 60}, false)
 		c.entry = e
 		c.rebuild()
 		c.space.Query(geom.NewAABBAt(geom.NewVec(0, 0), 1, 1), aabbworld.AnyCapability,
@@ -280,10 +280,10 @@ func TestMoveRun_MovesEveryBoxAsMoveDoesButTheStill(t *testing.T) {
 	rng := rand.New(rand.NewPCG(4, 12))
 	deltas := []func() geom.Vec{
 		func() geom.Vec { return geom.Vec{} },
-		func() geom.Vec { return geom.NewVec(rng.Float64()*4-2, rng.Float64()*4-2) },
-		func() geom.Vec { return geom.NewVec(rng.Float64()*600-300, rng.Float64()*600-300) },
-		func() geom.Vec { return geom.NewVec(1e-12, 0) },
-		func() geom.Vec { return geom.NewVec(0, -rng.Float64()) },
+		func() geom.Vec { return geom.NewVec(float32(rng.Float64()*4-2), float32(rng.Float64()*4-2)) },
+		func() geom.Vec { return geom.NewVec(float32(rng.Float64()*600-300), float32(rng.Float64()*600-300)) },
+		func() geom.Vec { return geom.NewVec(1.0/1024, 0) },
+		func() geom.Vec { return geom.NewVec(0, -float32(rng.Float64())) },
 	}
 	for _, edges := range []aabbworld.Edges{
 		0, aabbworld.Torus, aabbworld.WrapX, aabbworld.OpenY, aabbworld.OpenX | aabbworld.OpenY,
@@ -300,9 +300,9 @@ func TestMoveRun_MovesEveryBoxAsMoveDoesButTheStill(t *testing.T) {
 		var by []geom.Vec
 		for i := range 2000 {
 			r := untouched
-			side := []float64{0.5, 3, 20, 130}[rng.IntN(4)]
-			at := geom.NewVec(rng.Float64()*400-150, rng.Float64()*400-150)
-			r.Box, r.Caps = plane.NewAABB(at, side, side*(0.5+rng.Float64())), aabbworld.CanCollide
+			side := []float32{0.5, 3, 20, 130}[rng.IntN(4)]
+			at := geom.NewVec(float32(rng.Float64()*400-150), float32(rng.Float64()*400-150))
+			r.Box, r.Caps = plane.NewAABB(at, side, side*(0.5+float32(rng.Float64()))), aabbworld.CanCollide
 			space.Place(&r.Box)
 			records, ids = append(records, r), append(ids, uid.UID64(i+1))
 			by = append(by, deltas[rng.IntN(len(deltas))]())
@@ -330,12 +330,12 @@ func TestMoveRun_MovesEveryBoxAsMoveDoesButTheStill(t *testing.T) {
 	}
 }
 
-func bits(box plane.AABB) [8]uint64 {
-	return [8]uint64{
-		math.Float64bits(box.TopLeft.X), math.Float64bits(box.TopLeft.Y),
-		math.Float64bits(box.BottomRight.X), math.Float64bits(box.BottomRight.Y),
-		math.Float64bits(box.Size.X), math.Float64bits(box.Size.Y),
-		math.Float64bits(box.Overhang.X), math.Float64bits(box.Overhang.Y),
+func bits(box plane.AABB) [8]uint32 {
+	return [8]uint32{
+		math.Float32bits(box.TopLeft.X), math.Float32bits(box.TopLeft.Y),
+		math.Float32bits(box.BottomRight.X), math.Float32bits(box.BottomRight.Y),
+		math.Float32bits(box.Size.X), math.Float32bits(box.Size.Y),
+		math.Float32bits(box.Overhang.X), math.Float32bits(box.Overhang.Y),
 	}
 }
 

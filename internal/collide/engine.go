@@ -21,7 +21,7 @@ type Engine struct {
 	grid       *spatial.Grid
 	surface    *iplane.Surface
 	handler    Handler
-	reach      float64
+	reach      float32
 	iterations int
 
 	solver Solver
@@ -39,7 +39,7 @@ type Engine struct {
 
 // New builds an Engine over the CanCollide items of grid, reporting to handler; field, when not
 // nil, is solid ground the movable items are pushed out of.
-func New(grid *spatial.Grid, surface *iplane.Surface, handler Handler, reach float64, iterations int, field pcollide.SolidField) *Engine {
+func New(grid *spatial.Grid, surface *iplane.Surface, handler Handler, reach float32, iterations int, field pcollide.SolidField) *Engine {
 	e := &Engine{grid: grid, surface: surface, handler: handler, reach: reach, iterations: iterations}
 	e.onPair, e.touch, e.tell, e.visit = e.add, e.ask, e.report, e.pushed
 	if field != nil {

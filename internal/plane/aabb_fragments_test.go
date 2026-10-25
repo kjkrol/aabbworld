@@ -8,7 +8,7 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 )
 
-func box(x0, y0, x1, y1 float64) geom.AABB {
+func box(x0, y0, x1, y1 float32) geom.AABB {
 	return geom.NewAABB(geom.NewVec(x0, y0), geom.NewVec(x1, y1))
 }
 
@@ -16,7 +16,7 @@ func TestVisitFragments_RebuildsEveryPieceWhereItBelongs(t *testing.T) {
 	space := NewToroidal2D(100, 100)
 
 	cases := map[string]struct {
-		x, y, w, h float64
+		x, y, w, h float32
 		want       map[plane.FragPosition]geom.AABB
 	}{
 		"clear of every edge": {
@@ -86,7 +86,7 @@ func TestVisitFragments_StopsWhenAsked(t *testing.T) {
 }
 
 func TestAABB_StaysSmall(t *testing.T) {
-	if got := unsafe.Sizeof(plane.AABB{}); got != 64 {
-		t.Errorf("AABB is %d bytes, want 64 — corners, size and overhang and nothing else", got)
+	if got := unsafe.Sizeof(plane.AABB{}); got != 32 {
+		t.Errorf("AABB is %d bytes, want 32 — corners, size and overhang and nothing else", got)
 	}
 }

@@ -359,7 +359,7 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 
 // Pairs calls fn once, lower position first, for every two items sharing want whose boxes grown
 // by reach of their shorter side touch. It reads the boxes as they are now.
-func (g *Grid) Pairs(reach float64, want Capability, fn func(a, b int32)) {
+func (g *Grid) Pairs(reach float32, want Capability, fn func(a, b int32)) {
 	s := &g.sweep
 	s.shift, s.side = g.cellRes, g.side
 	s.listItems(g.surface, g.columns, reach, want)
@@ -369,7 +369,7 @@ func (g *Grid) Pairs(reach float64, want Capability, fn func(a, b int32)) {
 }
 
 // cellOf is the column or row holding v, held inside the grid.
-func (g *Grid) cellOf(v float64) uint32 {
+func (g *Grid) cellOf(v float32) uint32 {
 	if !(v >= 0) {
 		return 0
 	}
@@ -389,12 +389,12 @@ func (g *Grid) clamp(box geom.AABB) (geom.AABB, bool) {
 }
 
 // clampToGrid holds a coordinate inside the indexable grid, NaN included.
-func clampToGrid(val float64, max uint32) float64 {
+func clampToGrid(val float32, max uint32) float32 {
 	if !(val >= 0) {
 		return 0
 	}
-	if val > float64(max) {
-		return float64(max)
+	if val > float32(max) {
+		return float32(max)
 	}
 	return val
 }

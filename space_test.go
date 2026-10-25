@@ -80,7 +80,7 @@ func TestSpace_ToroidalWrap(t *testing.T) {
 	space.Move(box, shift)
 	space.Rebuild(items)
 
-	assert.Equal(t, float64(20), box.TopLeft.X, "Object should physically wrap around to position X=20")
+	assert.Equal(t, float32(20), box.TopLeft.X, "Object should physically wrap around to position X=20")
 
 	foundIDs := []uid.UID64{}
 	queryBoxWrapped := geom.NewAABBAt(geom.NewVec(25, 55), 5, 5)
@@ -126,13 +126,13 @@ func TestSpace_Visible(t *testing.T) {
 	assert.True(t, space.Scan(guard, cone, &view))
 
 	var seen []uid.UID64
-	n := view.Entities(func(id uid.UID64, _ float64) { seen = append(seen, id) })
+	n := view.Entities(func(id uid.UID64, _ float32) { seen = append(seen, id) })
 	assert.Equal(t, 1, n)
 	assert.Equal(t, []uid.UID64{inView}, seen, "behind must be hidden by inView")
 
 	outline := view.Outline(0, nil)
 	assert.NotEmpty(t, outline)
-	assert.Equal(t, float64(505), outline[0].X, "the fan starts at the observer")
+	assert.Equal(t, float32(505), outline[0].X, "the fan starts at the observer")
 
 	assert.False(t, space.Scan(uid.UID64(999), cone, &view), "unknown observer")
 }

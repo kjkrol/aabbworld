@@ -13,7 +13,7 @@ import (
 )
 
 // record is an entity as gram keeps it in a column of goke: its box first, then its velocity,
-// its kind and its capability at 100, 104 bytes in all.
+// its kind and its capability at 68, 72 bytes in all.
 type record struct {
 	Box  plane.AABB
 	Vel  [4]float64
@@ -46,7 +46,7 @@ func newColumnScene(b *testing.B, side, bucket uint32) *columnScene {
 	sc := &columnScene{space: space}
 	rng := rand.New(rand.NewPCG(13, 21))
 	for range 8 {
-		at := geom.NewVec(rng.Float64()*float64(side-100), rng.Float64()*float64(side-100))
+		at := geom.NewVec(float32(rng.Float64()*float64(side-100)), float32(rng.Float64()*float64(side-100)))
 		sc.probes = append(sc.probes, geom.NewAABBAt(at, 100, 100))
 	}
 	return sc
@@ -64,7 +64,7 @@ func (sc *columnScene) put(box plane.AABB, dx, dy float64) {
 func spreadScene(b *testing.B) *columnScene {
 	sc := newColumnScene(b, 4000, 64)
 	for i := range 5000 {
-		sc.put(plane.NewAABB(geom.NewVec(float64(10+i%71*30), float64(10+i/71*30)), 20, 20), 0.5, 0)
+		sc.put(plane.NewAABB(geom.NewVec(float32(10+i%71*30), float32(10+i/71*30)), 20, 20), 0.5, 0)
 	}
 	return sc
 }
@@ -76,7 +76,7 @@ func crowdScene(b *testing.B) *columnScene {
 	rng := rand.New(rand.NewPCG(3, 8))
 	for range 5000 {
 		heading := rng.Float64() * 2 * math.Pi
-		at := geom.NewVec(rng.Float64()*1024, rng.Float64()*1024)
+		at := geom.NewVec(float32(rng.Float64()*1024), float32(rng.Float64()*1024))
 		sc.put(plane.NewAABB(at, 6, 6), math.Cos(heading), math.Sin(heading))
 	}
 	engine := sc.space.CollideEngine(&writeBack{records: sc.records}, columnCollide)
@@ -98,7 +98,7 @@ var columnCollide = collide.Config{Reach: 0.5, Iterations: 16}
 func (sc *columnScene) move() {
 	for i := range sc.records {
 		r := &sc.records[i]
-		sc.space.Move(&r.Box, geom.NewVec(r.Vel[0]*r.Vel[2], r.Vel[1]*r.Vel[2]))
+		sc.space.Move(&r.Box, geom.NewVec(float32(r.Vel[0]*r.Vel[2]), float32(r.Vel[1]*r.Vel[2])))
 	}
 }
 
@@ -129,11 +129,12 @@ func (h *inPlace) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, bool) { return 
 func (h *inPlace) Contact(uid.UID64, uid.UID64, geom.Vec)              { h.contacts++ }
 func (h *inPlace) Moved(uid.UID64, plane.AABB)                         {}
 
-// Benchmark_Column_RebuildQueryTick is one tick of a space over records in a column of 104-byte
-// structs, as gram's are: every record moves, then Rebuild, eight 100x100 queries and a collision
-// tick confirming every pair — no tick in the spread scene without one, gram's world alone. items
-// copies the records into Items and writes the pushed boxes back from Moved, as gram does before
-// runs; runs hands the records over as runs of a chunk each, and the tick pushes them in place.
+// Benchmark_Column_RebuildQueryTick is one tick of a space over records in a column of 72-byte
+// structs, as gram's are with the box in float32: every record moves, then Rebuild, eight 100x100
+// queries and a collision tick confirming every pair — no tick in the spread scene without one,
+// gram's world alone. items copies the records into Items and writes the pushed boxes back from
+// Moved, as gram does before runs; runs hands the records over as runs of a chunk each, and the
+// tick pushes them in place.
 func Benchmark_Column_RebuildQueryTick(b *testing.B) {
 	for _, scene := range []struct {
 		name  string
@@ -211,7 +212,7 @@ func Benchmark_Column_Move(b *testing.B) {
 				by := deltas[:len(rows)]
 				for k := range rows {
 					r := &rows[k]
-					by[k] = geom.NewVec(r.Vel[0]*r.Vel[2], r.Vel[1]*r.Vel[2])
+					by[k] = geom.NewVec(float32(r.Vel[0]*r.Vel[2]), float32(r.Vel[1]*r.Vel[2]))
 				}
 				run := aabbworld.RunOf(sc.ids[i:i+len(rows)], rows, recordBox, recordCaps)
 				left = sc.space.MoveRun(run, by, left[:0])

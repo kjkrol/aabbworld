@@ -21,13 +21,10 @@ func wrapToPi(a float64) float64 {
 }
 
 // subtendedArc is the arc box spans as seen from origin outside it, clipped to ±halfAngle.
-func subtendedArc(origin geom.Vec, box geom.AABB, coneDir, halfAngle float64) arc {
-	corners := [4][2]float64{
-		{box.TopLeft.X - origin.X, box.TopLeft.Y - origin.Y},
-		{box.BottomRight.X - origin.X, box.TopLeft.Y - origin.Y},
-		{box.BottomRight.X - origin.X, box.BottomRight.Y - origin.Y},
-		{box.TopLeft.X - origin.X, box.BottomRight.Y - origin.Y},
-	}
+func subtendedArc(origin vec, box geom.AABB, coneDir, halfAngle float64) arc {
+	x1, y1 := float64(box.TopLeft.X)-origin.x, float64(box.TopLeft.Y)-origin.y
+	x2, y2 := float64(box.BottomRight.X)-origin.x, float64(box.BottomRight.Y)-origin.y
+	corners := [4][2]float64{{x1, y1}, {x2, y1}, {x2, y2}, {x1, y2}}
 
 	lo, hi := corners[0], corners[0]
 	for _, c := range corners[1:] {
@@ -54,7 +51,7 @@ func subtendedArc(origin geom.Vec, box geom.AABB, coneDir, halfAngle float64) ar
 // wedge holds the cone's two edge directions, dismissing a candidate by cross products alone.
 // A cone of a half-turn or wider keeps usable false and rejects nothing.
 type wedge struct {
-	lo, hi geom.Vec
+	lo, hi vec
 	usable bool
 }
 
@@ -63,22 +60,22 @@ func newWedge(coneDir, halfAngle float64) wedge {
 		return wedge{}
 	}
 	return wedge{
-		lo:     geom.NewVec(math.Cos(coneDir-halfAngle), math.Sin(coneDir-halfAngle)),
-		hi:     geom.NewVec(math.Cos(coneDir+halfAngle), math.Sin(coneDir+halfAngle)),
+		lo:     vec{math.Cos(coneDir - halfAngle), math.Sin(coneDir - halfAngle)},
+		hi:     vec{math.Cos(coneDir + halfAngle), math.Sin(coneDir + halfAngle)},
 		usable: true,
 	}
 }
 
 // excludes reports whether the whole box lies beyond one cone edge.
-func (w wedge) excludes(origin geom.Vec, box geom.AABB) bool {
+func (w wedge) excludes(origin vec, box geom.AABB) bool {
 	if !w.usable {
 		return false
 	}
 	pastLo, pastHi := true, true
-	for _, dx := range [2]float64{box.TopLeft.X - origin.X, box.BottomRight.X - origin.X} {
-		for _, dy := range [2]float64{box.TopLeft.Y - origin.Y, box.BottomRight.Y - origin.Y} {
-			pastLo = pastLo && w.lo.X*dy-w.lo.Y*dx < 0
-			pastHi = pastHi && w.hi.X*dy-w.hi.Y*dx > 0
+	for _, dx := range [2]float64{float64(box.TopLeft.X) - origin.x, float64(box.BottomRight.X) - origin.x} {
+		for _, dy := range [2]float64{float64(box.TopLeft.Y) - origin.y, float64(box.BottomRight.Y) - origin.y} {
+			pastLo = pastLo && w.lo.x*dy-w.lo.y*dx < 0
+			pastHi = pastHi && w.hi.x*dy-w.hi.y*dx > 0
 			if !pastLo && !pastHi {
 				return false
 			}

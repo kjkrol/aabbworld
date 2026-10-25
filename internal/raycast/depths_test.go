@@ -34,9 +34,9 @@ func TestDepths_MatchRaysCastDirectly(t *testing.T) {
 				if cx == 3 && cy == 3 {
 					continue
 				}
-				x := float64(1700 + cx*100 + r.IntN(20))
-				y := float64(1700 + cy*100 + r.IntN(20))
-				w, h := float64(20+r.IntN(40)), float64(20+r.IntN(40))
+				x := float32(1700 + cx*100 + r.IntN(20))
+				y := float32(1700 + cy*100 + r.IntN(20))
+				w, h := float32(20+r.IntN(40)), float32(20+r.IntN(40))
 				s.put(id, x, y, w, h)
 				boxes = append(boxes, [4]float64{float64(x), float64(y), float64(x + w), float64(y + h)})
 				id++
@@ -45,7 +45,7 @@ func TestDepths_MatchRaysCastDirectly(t *testing.T) {
 
 		coneDir := float64(trial)
 		cone := raycast.Cone{
-			Direction: geom.NewVec(math.Cos(coneDir), math.Sin(coneDir)),
+			Direction: geom.NewVec(float32(math.Cos(coneDir)), float32(math.Sin(coneDir))),
 			HalfAngle: math.Pi / 4,
 			Radius:    500,
 		}
@@ -61,9 +61,10 @@ func TestDepths_MatchRaysCastDirectly(t *testing.T) {
 		if len(got) != k {
 			t.Fatalf("trial %d: got %d depths, want %d", trial, len(got), k)
 		}
-		step := 2 * cone.HalfAngle / float64(k-1)
+		half := float64(cone.HalfAngle)
+		step := 2 * half / float64(k-1)
 		for i, d := range got {
-			want := nearestAlong(boxes, origin, coneDir-cone.HalfAngle+float64(i)*step, cone.Radius)
+			want := nearestAlong(boxes, origin, coneDir-half+float64(i)*step, float64(cone.Radius))
 			if math.Abs(float64(d)-want) > 1e-3 {
 				t.Errorf("trial %d: depth %d = %.4f, casting that ray gives %.4f", trial, i, d, want)
 			}
@@ -141,7 +142,7 @@ func TestDepths_DoesNotDisturbTheExactSweep(t *testing.T) {
 	clean := &raycast.View{}
 	clean.Scan(s, eye, cone)
 	var wantIDs []seenPair
-	clean.Entities(func(id uid.UID64, d float64) { wantIDs = append(wantIDs, seenPair{id, d}) })
+	clean.Entities(func(id uid.UID64, d float32) { wantIDs = append(wantIDs, seenPair{id, d}) })
 	wantPts := clean.Outline(0, nil)
 
 	v := &raycast.View{}
@@ -149,7 +150,7 @@ func TestDepths_DoesNotDisturbTheExactSweep(t *testing.T) {
 	v.Depths(24, nil)
 
 	var gotIDs []seenPair
-	v.Entities(func(id uid.UID64, d float64) { gotIDs = append(gotIDs, seenPair{id, d}) })
+	v.Entities(func(id uid.UID64, d float32) { gotIDs = append(gotIDs, seenPair{id, d}) })
 	if len(gotIDs) != len(wantIDs) {
 		t.Fatalf("Entities reports %d after Depths, want %d", len(gotIDs), len(wantIDs))
 	}

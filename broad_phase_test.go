@@ -39,8 +39,8 @@ type crowd struct {
 	runs    []aabbworld.Run
 }
 
-// record is an entity as an ECS keeps it in a column: its box first, its capability at 100,
-// 104 bytes in all.
+// record is an entity as an ECS keeps it in a column: its box first, its capability at 68,
+// 72 bytes in all.
 type record struct {
 	Box  plane.AABB
 	Vel  [4]float64
@@ -89,7 +89,7 @@ func newCrowd(t testing.TB, width, height uint32, edges aabbworld.Edges) *crowd 
 	return &crowd{space: space}
 }
 
-func (c *crowd) add(x, y, w, h float64, caps aabbworld.Capability) {
+func (c *crowd) add(x, y, w, h float32, caps aabbworld.Capability) {
 	box := c.space.WrapAABB(plane.NewAABB(geom.NewVec(x, y), w, h).AABB)
 	c.items = append(c.items, aabbworld.Item{ID: uid.UID64(len(c.items)), Box: box, Caps: caps})
 }
@@ -113,19 +113,19 @@ func (c *crowd) rebuild() {
 }
 
 // scatter fills the crowd with count boxes of the given sides, anywhere in the world.
-func (c *crowd) scatter(rng *rand.Rand, count int, sides []float64, whole bool) {
+func (c *crowd) scatter(rng *rand.Rand, count int, sides []float32, whole bool) {
 	width, height, _ := c.space.Bounds()
 	for range count {
 		w, h := sides[rng.IntN(len(sides))], sides[rng.IntN(len(sides))]
-		x, y := rng.Float64()*float64(width), rng.Float64()*float64(height)
+		x, y := float32(rng.Float64()*float64(width)), float32(rng.Float64()*float64(height))
 		if !c.space.Edges.WrapsX() {
-			x = rng.Float64() * (float64(width) - w)
+			x = float32(rng.Float64()) * (float32(width) - w)
 		}
 		if !c.space.Edges.WrapsY() {
-			y = rng.Float64() * (float64(height) - h)
+			y = float32(rng.Float64()) * (float32(height) - h)
 		}
 		if whole {
-			x, y = float64(int(x)), float64(int(y))
+			x, y = float32(int(x)), float32(int(y))
 		}
 		caps := aabbworld.CanCollide
 		if rng.IntN(5) == 0 {
@@ -167,7 +167,7 @@ func touched(space *aabbworld.Space) []idPair {
 func (c *crowd) pairs() []idPair { return touched(c.space) }
 
 func TestBroadPhase_FindsExactlyWhoOverlaps(t *testing.T) {
-	sizes := map[string][]float64{
+	sizes := map[string][]float32{
 		"one size":            {10},
 		"2, 16 and 100":       {2, 16, 100},
 		"wider than a bucket": {40, 150},
@@ -232,7 +232,7 @@ func TestBroadPhase_SaysTheSameThingTwice(t *testing.T) {
 	for _, e := range entries {
 		c := newCrowd(t, 1000, 800, aabbworld.Torus)
 		c.entry = e
-		c.scatter(rand.New(rand.NewPCG(1, 2)), 500, []float64{2, 16, 100}, false)
+		c.scatter(rand.New(rand.NewPCG(1, 2)), 500, []float32{2, 16, 100}, false)
 
 		first, second := c.pairs(), c.pairs()
 		if len(first) == 0 {
@@ -249,7 +249,7 @@ func TestBroadPhase_FollowsTheItemsItIsRebuiltFrom(t *testing.T) {
 		c := newCrowd(t, 1000, 800, 0)
 		c.entry = e
 		for x := range 4 {
-			c.add(100+200*float64(x), 100, 10, 10, aabbworld.CanCollide)
+			c.add(100+200*float32(x), 100, 10, 10, aabbworld.CanCollide)
 		}
 		c.rebuild()
 		if got := c.pairs(); len(got) != 0 {

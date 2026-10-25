@@ -10,7 +10,14 @@ import (
 
 // reach is how far the outline point at index i sits from the observer.
 func reach(pts []geom.Vec, i int) float64 {
-	return math.Hypot(pts[i].X-pts[0].X, pts[i].Y-pts[0].Y)
+	return math.Hypot(float64(pts[i].X)-float64(pts[0].X), float64(pts[i].Y)-float64(pts[0].Y))
+}
+
+// ulp is the float32 step at p's larger coordinate; rounding p to float32 moves it by at most half
+// of one on each axis.
+func ulp(p geom.Vec) float64 {
+	m := float32(max(math.Abs(float64(p.X)), math.Abs(float64(p.Y))))
+	return float64(math.Nextafter32(m, math.MaxFloat32) - m)
 }
 
 func TestOutline_EmptySceneIsAnArcAtFullRange(t *testing.T) {
@@ -22,7 +29,7 @@ func TestOutline_EmptySceneIsAnArcAtFullRange(t *testing.T) {
 		t.Fatalf("outline has %d points, expected the arc to be subdivided", len(pts))
 	}
 	for i := 1; i < len(pts); i++ {
-		if d := reach(pts, i); math.Abs(d-300) > 1e-6 {
+		if d := reach(pts, i); math.Abs(d-300) > 4*ulp(pts[i]) { // the point is rounded to float32
 			t.Fatalf("point %d sits at %.3f, want the full range 300", i, d)
 		}
 	}
@@ -67,8 +74,8 @@ func TestOutline_StaysWithinTheCone(t *testing.T) {
 	const half = math.Pi / 6
 	pts := outline(t, s, eye, eastward(half, 500), 0)
 	for i := 1; i < len(pts); i++ {
-		a := math.Atan2(pts[i].Y-pts[0].Y, pts[i].X-pts[0].X)
-		if math.Abs(a) > half+1e-9 {
+		a := math.Atan2(float64(pts[i].Y)-float64(pts[0].Y), float64(pts[i].X)-float64(pts[0].X))
+		if math.Abs(a) > half+4*ulp(pts[i])/reach(pts, i) { // rounding to float32 turns the point a little
 			t.Errorf("point %d lies at %.4f rad, outside the cone's ±%.4f", i, a, half)
 		}
 	}
@@ -83,8 +90,8 @@ func TestOutline_AgreesWithVisible(t *testing.T) {
 
 	cone := eastward(math.Pi/3, 900)
 
-	var dists []float64
-	scan(t, s, eye, cone).Entities(func(_ uid.UID64, d float64) { dists = append(dists, d) })
+	var dists []float32
+	scan(t, s, eye, cone).Entities(func(_ uid.UID64, d float32) { dists = append(dists, d) })
 	if len(dists) == 0 {
 		t.Fatal("nothing visible; the fixture proves nothing")
 	}
@@ -93,7 +100,7 @@ func TestOutline_AgreesWithVisible(t *testing.T) {
 	for _, want := range dists {
 		found := false
 		for i := 1; i < len(pts); i++ {
-			if math.Abs(reach(pts, i)-want) < 1e-6 {
+			if math.Abs(reach(pts, i)-float64(want)) < 4*ulp(pts[i]) { // both rounded to float32
 				found = true
 				break
 			}

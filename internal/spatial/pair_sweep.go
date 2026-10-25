@@ -39,16 +39,18 @@ type sweepEntry struct {
 	at  int32
 	// multi marks an entry whose reach wraps, and so is listed in more than one image.
 	multi bool
+	// 32 bytes in all: amd64 loads a float32 from a shifted index, not from one scaled by 8.
+	_ [8]byte
 }
 
 type seamPair struct{ a, b int32 }
 
-// wideFrom is the fewest entries a cell needs to be swept four at a time, when wide.
+// wideFrom is the fewest entries a cell needs to be swept eight at a time, when wide.
 const wideFrom = 8
 
 // listItems gathers every matching record's grown images, and counts them into their cells.
 func (s *pairSweep) listItems(
-	surface *iplane.Surface, columns []column, reach float64, want Capability,
+	surface *iplane.Surface, columns []column, reach float32, want Capability,
 ) {
 	s.begin()
 	first := int32(0)
@@ -109,7 +111,7 @@ func (s *pairSweep) add(box geom.AABB, at int32, multi bool) {
 }
 
 // cellOf is the column or row holding v, held inside the grid.
-func (s *pairSweep) cellOf(v float64) uint32 {
+func (s *pairSweep) cellOf(v float32) uint32 {
 	if !(v >= 0) {
 		return 0
 	}
