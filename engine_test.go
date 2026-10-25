@@ -32,15 +32,21 @@ func engineSpace(t *testing.T, toroidal bool) *aabbworld.Space {
 // hooks is a Handler made of optional funcs; an unset Touch confirms every pair.
 type hooks struct {
 	touch   func(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool)
+	share   func(a, b uid.UID64) float32 // nil, a half
 	contact func(a, b uid.UID64, pen geom.Vec)
 	moved   func(id uid.UID64, box plane.AABB)
 }
 
-func (h *hooks) Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
-	if h.touch == nil {
-		return pen, true
+func (h *hooks) Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, float32, bool) {
+	share := float32(0.5)
+	if h.share != nil {
+		share = h.share(a, b)
 	}
-	return h.touch(a, b, pen)
+	if h.touch == nil {
+		return pen, share, true
+	}
+	pen, ok := h.touch(a, b, pen)
+	return pen, share, ok
 }
 
 func (h *hooks) Contact(a, b uid.UID64, pen geom.Vec) {
@@ -209,6 +215,24 @@ func TestTick_TouchMayRefineThePenetration(t *testing.T) {
 	}
 	if a.TopLeft.X != 99 || b.TopLeft.X != 105 {
 		t.Errorf("a at x=%v, b at x=%v, want one pass to move each by half of the refined 2", a.TopLeft.X, b.TopLeft.X)
+	}
+}
+
+func TestTick_TouchSharesThePush(t *testing.T) {
+	s := newScene(t, false)
+	a, b := s.put(1, 100, 100), s.put(2, 104, 100)
+	s.hooks.share = func(x, y uid.UID64) float32 {
+		if x != 1 || y != 2 {
+			t.Errorf("Touch asked of %v and %v, want 1 and 2, the lower id first", x, y)
+		}
+		return 0.25
+	}
+
+	s.tick(nil, nil)
+
+	if a.TopLeft.X != 98.5 || b.TopLeft.X != 108.5 {
+		t.Errorf("a at x=%v, b at x=%v, want a moved a quarter of the 6 apart and b the rest",
+			a.TopLeft.X, b.TopLeft.X)
 	}
 }
 

@@ -32,7 +32,9 @@
 // Every coordinate, size, distance and angle a Space takes or gives is a float32, so a box is 32
 // bytes. Whole units are exact up to 2^24 (16,777,216); between them the step is about 0.001 at
 // 10,000 and 0.008 at 100,000, well under a unit in any world a game draws. Sight works its rays
-// out in float64 inside and answers in float32.
+// out in float64 inside and answers in float32. The collision engine takes two boxes overlapping by
+// no more than a few such steps at their edges for touching, never pushing them apart: a share of
+// so little moves neither box.
 //
 // # Edges
 //
@@ -119,7 +121,8 @@
 // sweep tests a crowded cell — eight entries or more — eight boxes at a time: one box against the
 // next eight, their edges loaded side by side, the cell's claim on each pair checked in the same
 // pass. It finds the same pairs, in the same order, as the plain sweep, which every other build and
-// CPU runs. Crowds in large buckets gain most, sparse cells nothing; see BENCHMARKS.md.
+// CPU runs. Crowds in large buckets gain most, sparse cells nothing; see BENCHMARKS.md. [SIMD]
+// reports which sweep runs.
 //
 // # Package dependencies
 //

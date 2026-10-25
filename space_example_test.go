@@ -15,7 +15,7 @@ import (
 // printer is a collide.Handler that confirms every pair and says what the engine did.
 type printer struct{}
 
-func (printer) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, bool) { return pen, true }
+func (printer) Touch(_, _ uid.UID64, pen geom.Vec) (geom.Vec, float32, bool) { return pen, 0.5, true }
 func (printer) Contact(a, b uid.UID64, pen geom.Vec) {
 	fmt.Printf("contact %d-%d, penetration %s\n", a, b, pen)
 }

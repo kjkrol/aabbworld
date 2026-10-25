@@ -21,7 +21,7 @@ func solveEverything(items []spatial.Item, pairs []Pair, surface *iplane.Surface
 			p := &pairs[i]
 			a, b := &items[p.A].Box, &items[p.B].Box
 			measured++
-			hit, ok := a.DeepestOverlapWith(b)
+			pen, ok := penetration(a, b)
 			if !ok {
 				continue
 			}
@@ -32,7 +32,7 @@ func solveEverything(items []spatial.Item, pairs []Pair, surface *iplane.Surface
 			if p.Flags&Sensor != 0 {
 				continue
 			}
-			pushA, pushB, ok := split(hit.Penetration, p.Flags&StaticA != 0, p.Flags&StaticB != 0)
+			pushA, pushB, ok := split(pen, 0.5, p.Flags&StaticA != 0, p.Flags&StaticB != 0)
 			if !ok {
 				continue
 			}

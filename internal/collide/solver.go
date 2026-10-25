@@ -28,11 +28,13 @@ const (
 // state is what the solver remembers about a pair across passes.
 type state struct {
 	testedAt uint32 // the solver's clock when last measured: 0 for never, MaxUint32 for dropped
+	share    float32
 	flags    uint8
 }
 
-// Touch is asked once per pair, when its boxes first overlap; false drops the pair for the tick.
-type Touch func(i int, pen geom.Vec) (geom.Vec, bool)
+// Touch is asked once per pair, when its boxes first overlap, for the push and the part of it A
+// takes; false drops the pair for the tick.
+type Touch func(i int, pen geom.Vec) (geom.Vec, float32, bool)
 
 // Solver is the state and the algorithm behind collide.Engine, working on the items of a Grid.
 type Solver struct {
@@ -86,7 +88,7 @@ func (s *Solver) readyField() {
 // Add enters a pair into the batch and returns its index.
 func (s *Solver) Add(p Pair) int {
 	s.pairs = append(s.pairs, p)
-	s.states = append(s.states, state{flags: p.Flags})
+	s.states = append(s.states, state{share: 0.5, flags: p.Flags})
 	return len(s.pairs) - 1
 }
 
@@ -129,10 +131,12 @@ func (s *Solver) Solve(
 
 			if st.flags&reported == 0 {
 				if touch != nil {
-					if pen, ok = touch(i, pen); !ok {
+					var share float32
+					if pen, share, ok = touch(i, pen); !ok {
 						st.testedAt = math.MaxUint32
 						continue
 					}
+					st.share = shareOf(share)
 				}
 				st.flags |= reported
 				if onContact != nil {
@@ -143,7 +147,7 @@ func (s *Solver) Solve(
 			if st.flags&Sensor != 0 {
 				continue
 			}
-			pushA, pushB, ok := split(pen, st.flags&StaticA != 0, st.flags&StaticB != 0)
+			pushA, pushB, ok := split(pen, st.share, st.flags&StaticA != 0, st.flags&StaticB != 0)
 			if !ok {
 				continue
 			}
@@ -220,18 +224,32 @@ func (s *Solver) VisitMoved(fn func(item int32)) {
 	}
 }
 
-// penetration is how far a and b interpenetrate, wrapped images included; false when apart.
+// penetration is how far a and b interpenetrate, wrapped images included; false when apart, or
+// when they overlap by no more than float32's rounding of where they lie: half of such an overlap
+// moves neither box, so shared between them it would only wander round a stack, never gone.
 func penetration(a, b *plane.AABB) (geom.Vec, bool) {
 	if a.Overhang == (geom.Vec{}) && b.Overhang == (geom.Vec{}) {
 		pen := a.AABB.Penetration(b.AABB)
-		return pen, pen != geom.Vec{}
+		return pen, pen != geom.Vec{} && !rounding(pen, a.AABB, b.AABB)
 	}
 	hit, ok := a.DeepestOverlapWith(b)
-	return hit.Penetration, ok
+	return hit.Penetration, ok && !rounding(hit.Penetration, hit.BoxA, hit.BoxB)
 }
 
-// split shares a penetration between the sides that can move; ok is false when neither can.
-func split(pen geom.Vec, staticA, staticB bool) (pushA, pushB geom.Vec, ok bool) {
+// rounding reports whether pen, along one axis, lies within a few float32 steps of the boxes'
+// edges on that axis
+func rounding(pen geom.Vec, a, b geom.AABB) bool {
+	if pen.X != 0 {
+		far := max(a.BottomRight.X, b.BottomRight.X, -a.TopLeft.X, -b.TopLeft.X)
+		return max(pen.X, -pen.X) <= far*0x1p-22
+	}
+	far := max(a.BottomRight.Y, b.BottomRight.Y, -a.TopLeft.Y, -b.TopLeft.Y)
+	return max(pen.Y, -pen.Y) <= far*0x1p-22
+}
+
+// split shares a penetration between the sides that can move, A taking share of it where both
+// can; ok is false when neither can.
+func split(pen geom.Vec, share float32, staticA, staticB bool) (pushA, pushB geom.Vec, ok bool) {
 	switch {
 	case staticA && staticB:
 		return geom.Vec{}, geom.Vec{}, false
@@ -240,9 +258,17 @@ func split(pen geom.Vec, staticA, staticB bool) (pushA, pushB geom.Vec, ok bool)
 	case staticA:
 		return geom.Vec{}, negate(pen), true
 	default:
-		half := geom.NewVec(pen.X/2, pen.Y/2)
-		return half, negate(half), true
+		rest := 1 - share
+		return geom.NewVec(pen.X*share, pen.Y*share), geom.NewVec(-pen.X*rest, -pen.Y*rest), true
 	}
+}
+
+// shareOf holds a handler's share within 0 and 1, a half for one that is no number
+func shareOf(share float32) float32 {
+	if share != share {
+		return 0.5
+	}
+	return min(max(share, 0), 1)
 }
 
 func negate(v geom.Vec) geom.Vec { return geom.NewVec(-v.X, -v.Y) }

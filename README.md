@@ -57,7 +57,8 @@ go get github.com/kjkrol/aabbworld
 ```
 
 Optionally, build with `GOEXPERIMENT=simd`: on amd64 with AVX2, the collision tick then tests the
-boxes of a crowded cell eight at a time, with the same results (see [Performance](#performance)).
+boxes of a crowded cell eight at a time, with the same results (see [Performance](#performance));
+`aabbworld.SIMD()` reports whether it does.
 
 <a id="features"></a>
 # ✨ Key Features

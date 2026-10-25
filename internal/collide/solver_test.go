@@ -4,6 +4,7 @@ import (
 	iplane "github.com/kjkrol/aabbworld/internal/plane"
 	"github.com/kjkrol/aabbworld/internal/spatial"
 	"github.com/kjkrol/uid"
+	"math"
 	"slices"
 	"testing"
 
@@ -105,6 +106,34 @@ func TestSolve_OddPenetrationLosesNothingInTheSplit(t *testing.T) {
 	}
 }
 
+// a handler's share moves A that part of the overlap of 6 and B the rest, a pinned side none
+func TestSolve_TheSharePartsTheTravel(t *testing.T) {
+	for name, c := range map[string]struct {
+		share            float32
+		staticA, staticB bool
+		wantA, wantB     float32
+	}{
+		"a quarter":               {share: 0.25, wantA: 1.5, wantB: 4.5},
+		"none, A stays":           {share: 0, wantA: 0, wantB: 6},
+		"all of it":               {share: 1, wantA: 6, wantB: 0},
+		"past all, held to all":   {share: 2, wantA: 6, wantB: 0},
+		"no number, halves":       {share: float32(math.NaN()), wantA: 3, wantB: 3},
+		"all of it, but A pinned": {share: 1, staticA: true, wantA: 0, wantB: 6},
+		"none, but B pinned":      {share: 0, staticB: true, wantA: 6, wantB: 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bt := boxes(at(100, 100), at(104, 100))
+			bt.pair(0, 1, flags(c.staticA, c.staticB, false))
+			share := func(_ int, pen geom.Vec) (geom.Vec, float32, bool) { return pen, c.share, true }
+			bt.s.Solve(entries(bt.items), flat(), iterations, share, nil, nil)
+			a, b := bt.box(0), bt.box(1)
+			if gotA, gotB := 100-a.TopLeft.X, b.TopLeft.X-104; gotA != c.wantA || gotB != c.wantB {
+				t.Errorf("A moved %v and B %v, want %v and %v", gotA, gotB, c.wantA, c.wantB)
+			}
+		})
+	}
+}
+
 func TestSolve_PinnedSideNeverMoves(t *testing.T) {
 	for name, tc := range map[string]struct{ staticA, staticB bool }{
 		"B pinned": {false, true},
@@ -176,8 +205,10 @@ func TestSolve_KeepsGoingWhileSeparationCreatesNewOverlap(t *testing.T) {
 	bt.pair(0, 2, 0)
 	bt.solve(flat(), nil)
 
+	// what overlaps within float32's rounding of edges out to x 114 touches
+	slop := float32(114) * 0x1p-22
 	for _, pair := range [][2]int{{0, 1}, {1, 2}, {0, 2}} {
-		if d := depth(bt.box(pair[0]), bt.box(pair[1])); d > 1e-6 {
+		if d := depth(bt.box(pair[0]), bt.box(pair[1])); d > slop {
 			t.Errorf("boxes %d and %d still overlap by %v", pair[0], pair[1], d)
 		}
 	}

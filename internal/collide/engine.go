@@ -11,7 +11,7 @@ import (
 
 // Handler is told what an Engine finds: each overlapping pair once, and every box it pushed.
 type Handler interface {
-	Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool)
+	Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, float32, bool)
 	Contact(a, b uid.UID64, pen geom.Vec)
 	Moved(id uid.UID64, box plane.AABB)
 }
@@ -87,7 +87,7 @@ func (e *Engine) add(a, b int32) {
 	e.solver.Add(Pair{A: a, B: b, Flags: flagsOf(e.items[a].Caps, e.items[b].Caps)})
 }
 
-func (e *Engine) ask(i int, pen geom.Vec) (geom.Vec, bool) {
+func (e *Engine) ask(i int, pen geom.Vec) (geom.Vec, float32, bool) {
 	p := e.solver.Pair(i)
 	return e.handler.Touch(e.items[p.A].ID, e.items[p.B].ID, pen)
 }

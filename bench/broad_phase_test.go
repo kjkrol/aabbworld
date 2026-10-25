@@ -32,11 +32,12 @@ type hooks struct {
 	touch func(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool)
 }
 
-func (h *hooks) Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
+func (h *hooks) Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, float32, bool) {
 	if h.touch == nil {
-		return pen, true
+		return pen, 0.5, true
 	}
-	return h.touch(a, b, pen)
+	pen, ok := h.touch(a, b, pen)
+	return pen, 0.5, ok
 }
 func (h *hooks) Contact(uid.UID64, uid.UID64, geom.Vec) {}
 func (h *hooks) Moved(uid.UID64, plane.AABB)            {}
