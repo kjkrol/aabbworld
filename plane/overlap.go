@@ -20,7 +20,7 @@ func (ab *AABB) DeepestOverlapWith(other *AABB) (Overlap, bool) {
 	}
 
 	var best Overlap
-	deepest := float64(0)
+	deepest := float32(0)
 	ab.visitImagePairs(*other, func(a, b geom.AABB) bool {
 		pen := a.Penetration(b)
 		if pen.X == 0 && pen.Y == 0 {
@@ -35,7 +35,7 @@ func (ab *AABB) DeepestOverlapWith(other *AABB) (Overlap, bool) {
 	return best, deepest > 0
 }
 
-func abs(x float64) float64 {
+func abs(x float32) float32 {
 	if x < 0 {
 		return -x
 	}

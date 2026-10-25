@@ -43,6 +43,6 @@ func TestSpace_WrapAABB_EuclideanClips(t *testing.T) {
 
 	wrapped := space.WrapAABB(overflowing)
 
-	assert.Equal(t, float64(100), wrapped.BottomRight.X, "expected BottomRight.X clipped to the world edge")
-	assert.Equal(t, float64(100), wrapped.BottomRight.Y, "expected BottomRight.Y clipped to the world edge")
+	assert.Equal(t, float32(100), wrapped.BottomRight.X, "expected BottomRight.X clipped to the world edge")
+	assert.Equal(t, float32(100), wrapped.BottomRight.Y, "expected BottomRight.Y clipped to the world edge")
 }

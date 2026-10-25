@@ -6,29 +6,49 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 )
 
-// surrounds reports whether p lies inside box, its edges included.
-func surrounds(box geom.AABB, p geom.Vec) bool {
-	return p.X >= box.TopLeft.X && p.X <= box.BottomRight.X && p.Y >= box.TopLeft.Y && p.Y <= box.BottomRight.Y
+// vec is a point or a direction as sight works with it: in float64, where the difference of two
+// float32 corners is exact and distances along a ray do not drift.
+type vec struct{ x, y float64 }
+
+// vec32 is v as the boxes hold it, for what the cone's fields are handed.
+func (v vec) vec32() geom.Vec { return geom.NewVec(float32(v.x), float32(v.y)) }
+
+// round32 is v rounded to what vec32 hands over, so the boxes, the cover and the profile are met
+// along the same ray.
+func (v vec) round32() vec { return vec{float64(float32(v.x)), float64(float32(v.y))} }
+
+// rect is a box as sight works with it, in float64 like vec: read once from the float32 corners,
+// then met by every ray of the scan.
+type rect struct{ x1, y1, x2, y2 float64 }
+
+func rectOf(b geom.AABB) rect {
+	return rect{float64(b.TopLeft.X), float64(b.TopLeft.Y), float64(b.BottomRight.X), float64(b.BottomRight.Y)}
 }
 
-func centerOf(a geom.AABB) geom.Vec {
-	return geom.NewVec(
-		(a.TopLeft.X+a.BottomRight.X)/2,
-		(a.TopLeft.Y+a.BottomRight.Y)/2,
-	)
+// surrounds reports whether p lies inside box, its edges included.
+func surrounds(box geom.AABB, p vec) bool {
+	return p.x >= float64(box.TopLeft.X) && p.x <= float64(box.BottomRight.X) &&
+		p.y >= float64(box.TopLeft.Y) && p.y <= float64(box.BottomRight.Y)
+}
+
+func centerOf(a geom.AABB) vec {
+	return vec{
+		(float64(a.TopLeft.X) + float64(a.BottomRight.X)) / 2,
+		(float64(a.TopLeft.Y) + float64(a.BottomRight.Y)) / 2,
+	}
 }
 
 // boxDistance is the gap between two boxes, zero when they touch or overlap.
 func boxDistance(a, b geom.AABB) float64 {
-	return math.Hypot(a.AxisDistanceX(b), a.AxisDistanceY(b))
+	return math.Hypot(float64(a.AxisDistanceX(b)), float64(a.AxisDistanceY(b)))
 }
 
 // nearestImage shifts box to whichever of its wrapped copies lies closest to origin.
-func nearestImage(origin geom.Vec, box geom.AABB, w, h float64) geom.AABB {
+func nearestImage(origin vec, box geom.AABB, w, h float64) geom.AABB {
 	c := centerOf(box)
-	dx := shortestDelta(c.X-origin.X, w)
-	dy := shortestDelta(c.Y-origin.Y, h)
-	d := geom.NewVec(origin.X+dx-c.X, origin.Y+dy-c.Y)
+	dx := shortestDelta(c.x-origin.x, w)
+	dy := shortestDelta(c.y-origin.y, h)
+	d := geom.NewVec(float32(origin.x+dx-c.x), float32(origin.y+dy-c.y))
 	return geom.NewAABB(box.TopLeft.Add(d), box.BottomRight.Add(d))
 }
 
@@ -48,12 +68,12 @@ func shortestDelta(d, size float64) float64 {
 }
 
 // searchAreas appends the index rectangles covering a cone of radius, split at each wrapping seam.
-func searchAreas(origin geom.Vec, radius, w, h float64, wrapX, wrapY bool, dst []geom.AABB) []geom.AABB {
-	xs, nx := axisSpans(origin.X-radius, origin.X+radius, w, wrapX)
-	ys, ny := axisSpans(origin.Y-radius, origin.Y+radius, h, wrapY)
+func searchAreas(origin vec, radius, w, h float64, wrapX, wrapY bool, dst []geom.AABB) []geom.AABB {
+	xs, nx := axisSpans(origin.x-radius, origin.x+radius, w, wrapX)
+	ys, ny := axisSpans(origin.y-radius, origin.y+radius, h, wrapY)
 	for _, x := range xs[:nx] {
 		for _, y := range ys[:ny] {
-			dst = append(dst, clampRect(geom.NewVec(x[0], y[0]), geom.NewVec(x[1], y[1]), w, h))
+			dst = append(dst, clampRect(vec{x[0], y[0]}, vec{x[1], y[1]}, w, h))
 		}
 	}
 	return dst
@@ -91,7 +111,7 @@ func splitAxis(lo, hi, size float64) (spans [2][2]float64, n int) {
 	return [2][2]float64{{lo, size}, {0, hi - size}}, 2
 }
 
-func clampRect(lo, hi geom.Vec, w, h float64) geom.AABB {
+func clampRect(lo, hi vec, w, h float64) geom.AABB {
 	cl := func(v, max float64) float64 {
 		switch {
 		case v < 0:
@@ -103,7 +123,7 @@ func clampRect(lo, hi geom.Vec, w, h float64) geom.AABB {
 		}
 	}
 	return geom.NewAABB(
-		geom.NewVec(cl(lo.X, w), cl(lo.Y, h)),
-		geom.NewVec(cl(hi.X, w), cl(hi.Y, h)),
+		vec{cl(lo.x, w), cl(lo.y, h)}.vec32(),
+		vec{cl(hi.x, w), cl(hi.y, h)}.vec32(),
 	)
 }

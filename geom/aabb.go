@@ -17,7 +17,7 @@ func NewAABB(topLeft, bottomRight Vec) AABB {
 }
 
 // NewAABBAt builds a AABB starting at pos with the provided width and height.
-func NewAABBAt(pos Vec, width, height float64) AABB {
+func NewAABBAt(pos Vec, width, height float32) AABB {
 	bottomRight := NewVec(pos.X+width, pos.Y+height)
 	return NewAABB(pos, bottomRight)
 }
@@ -49,15 +49,15 @@ func (ab AABB) Intersects(other AABB) bool {
 }
 
 // AxisDistanceTo returns the gap between tow given AABBs on the axis selected by axisValue.
-func (ab AABB) AxisDistanceX(other AABB) float64 {
+func (ab AABB) AxisDistanceX(other AABB) float32 {
 	return axisDistance1D(ab.TopLeft.X, ab.BottomRight.X, other.TopLeft.X, other.BottomRight.X)
 }
 
-func (ab AABB) AxisDistanceY(other AABB) float64 {
+func (ab AABB) AxisDistanceY(other AABB) float32 {
 	return axisDistance1D(ab.TopLeft.Y, ab.BottomRight.Y, other.TopLeft.Y, other.BottomRight.Y)
 }
 
-func axisDistance1D(aMin, aMax, bMin, bMax float64) float64 {
+func axisDistance1D(aMin, aMax, bMin, bMax float32) float32 {
 
 	if aMax < bMin {
 		return bMin - aMax

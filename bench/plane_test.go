@@ -16,7 +16,7 @@ var (
 // surfaces are the two edge rules the primitives are measured under.
 var surfaces = []struct {
 	name string
-	make func(w, h float64) *iplane.Surface
+	make func(w, h float32) *iplane.Surface
 }{
 	{"euclidean", iplane.NewEuclidean2D},
 	{"toroidal", iplane.NewToroidal2D},

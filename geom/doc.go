@@ -4,7 +4,7 @@
 //
 // # Vec
 //
-// A [Vec] is two float64 coordinates. [Vec.Add] and [Vec.Sub] return a new Vec; [Vec.AddMutable]
+// A [Vec] is two float32 coordinates. [Vec.Add] and [Vec.Sub] return a new Vec; [Vec.AddMutable]
 // changes one in place for the hot paths that shift a box every tick.
 //
 // # AABB

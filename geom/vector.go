@@ -4,10 +4,10 @@ import (
 	"fmt"
 )
 
-// Vec is a 2D vector in float64 coordinates.
-type Vec struct{ X, Y float64 }
+// Vec is a 2D vector in float32 coordinates.
+type Vec struct{ X, Y float32 }
 
-func NewVec(X, Y float64) Vec { return Vec{X, Y} }
+func NewVec(X, Y float32) Vec { return Vec{X, Y} }
 
 // Add returns a new vector that is the sum of v and v2.
 func (v Vec) Add(v2 Vec) Vec { return Vec{v.X + v2.X, v.Y + v2.Y} }

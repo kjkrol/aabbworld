@@ -14,6 +14,10 @@
 // entity is and, when sight has heights, the eye's height, each entity's bottom and top and the
 // ground's height at a point. The scan queries the index for the rectangles covering the cone,
 // split at each wrapping seam, and keeps only the candidates the cone's two edges do not dismiss.
+// The cone's fields are float32, as the boxes are; the scan works the eye, its rays and the
+// distances along them out in float64, where the difference of two corners is exact, and answers
+// in float32. The eye and each ray's direction are rounded to float32 first, so the boxes, the
+// cover and the profile are met along the very ray Walk and Along are handed.
 //
 // # View
 //

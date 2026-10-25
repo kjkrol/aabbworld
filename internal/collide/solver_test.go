@@ -14,7 +14,7 @@ import (
 
 const iterations = 16
 
-func at(x, y float64) plane.AABB { return plane.NewAABB(geom.NewVec(x, y), 10, 10) }
+func at(x, y float32) plane.AABB { return plane.NewAABB(geom.NewVec(x, y), 10, 10) }
 
 func flags(staticA, staticB, sensor bool) uint8 {
 	var f uint8
@@ -67,7 +67,7 @@ func entries(items []spatial.Item) []spatial.Entry {
 func (b *batch) box(i int) plane.AABB { return b.items[i].Box }
 
 // depth is how far two boxes interpenetrate on their shallower axis, negative when apart.
-func depth(a, b plane.AABB) float64 {
+func depth(a, b plane.AABB) float32 {
 	x := min(a.BottomRight.X, b.BottomRight.X) - max(a.TopLeft.X, b.TopLeft.X)
 	y := min(a.BottomRight.Y, b.BottomRight.Y) - max(a.TopLeft.Y, b.TopLeft.Y)
 	return min(x, y)

@@ -20,13 +20,13 @@ type QueryableSpace interface {
 // how tall each entity stands (nil: all heights) and how high the ground lies (nil: flat).
 type Cone struct {
 	Direction    geom.Vec
-	HalfAngle    float64
-	Radius       float64
-	Transparency func(id uid.UID64) float64
-	Eye          float64
-	Elevation    func(id uid.UID64) (bottom, top float64)
-	Ground       func(p geom.Vec) float64
-	GroundStep   float64
+	HalfAngle    float32
+	Radius       float32
+	Transparency func(id uid.UID64) float32
+	Eye          float32
+	Elevation    func(id uid.UID64) (bottom, top float32)
+	Ground       func(p geom.Vec) float32
+	GroundStep   float32
 	Profile      ProfileField
 	Cover        CoverField
 }
@@ -43,7 +43,7 @@ type View struct {
 	uniform []float64
 	depths  []sample
 
-	origin    geom.Vec
+	origin    vec
 	coneDir   float64
 	halfAngle float64
 	radius    float64
@@ -76,28 +76,28 @@ func (v *View) Scan(space QueryableSpace, observer uid.UID64, cone Cone) bool {
 	w, h := float64(width), float64(height)
 	eyeBox := eye
 
-	v.origin = centerOf(eyeBox)
-	v.coneDir = math.Atan2(cone.Direction.Y, cone.Direction.X)
-	v.halfAngle = cone.HalfAngle
-	v.radius = cone.Radius
+	v.origin = centerOf(eyeBox).round32()
+	v.coneDir = math.Atan2(float64(cone.Direction.Y), float64(cone.Direction.X))
+	v.halfAngle = float64(cone.HalfAngle)
+	v.radius = float64(cone.Radius)
 	v.elevated = cone.Elevation != nil || cone.Ground != nil || cone.Profile != nil
 	var elev *elevation
 	if v.elevated {
-		step := cone.GroundStep
+		step := float64(cone.GroundStep)
 		if step <= 0 {
-			step = cone.Radius / 16
+			step = v.radius / 16
 		}
-		v.elev = elevation{eye: cone.Eye, ground: cone.Ground, profile: cone.Profile, step: step, w: wrapSize(w, wrapX), h: wrapSize(h, wrapY)}
+		v.elev = elevation{eye: float64(cone.Eye), ground: cone.Ground, profile: cone.Profile, step: step, w: wrapSize(w, wrapX), h: wrapSize(h, wrapY)}
 		elev = &v.elev
 	}
 
-	v.samples = sweep(v.origin, v.coneDir, cone.HalfAngle, cone.Radius, v.gather(space, observer, eyeBox, cone, w, h, wrapX, wrapY), elev, &v.scratch)
+	v.samples = sweep(v.origin, v.coneDir, v.halfAngle, v.radius, v.gather(space, observer, eyeBox, cone, w, h, wrapX, wrapY), elev, &v.scratch)
 	v.valid = true
 	return true
 }
 
 // Entities calls fn for every entity in view, nearest first, and returns how many.
-func (v *View) Entities(fn func(id uid.UID64, dist float64)) int {
+func (v *View) Entities(fn func(id uid.UID64, dist float32)) int {
 	if !v.valid {
 		return 0
 	}
@@ -121,7 +121,7 @@ func (v *View) Entities(fn func(id uid.UID64, dist float64)) int {
 		}
 	})
 	for _, f := range found {
-		fn(f.id, f.dist)
+		fn(f.id, float32(f.dist))
 	}
 	return len(found)
 }
@@ -180,25 +180,26 @@ func (v *View) Shadows(k int, dst []Shadow) []Shadow {
 }
 
 // Outline appends the lit region to dst as a fan from the observer; maxArcStep 0 picks a default.
-func (v *View) Outline(maxArcStep float64, dst []geom.Vec) []geom.Vec {
+func (v *View) Outline(maxArcStep float32, dst []geom.Vec) []geom.Vec {
 	if !v.valid {
 		return dst
 	}
-	if maxArcStep <= 0 {
-		maxArcStep = arcStep
+	step := float64(maxArcStep)
+	if step <= 0 {
+		step = arcStep
 	}
 
-	dst = append(dst, v.origin)
+	dst = append(dst, v.origin.vec32())
 	at := func(rel, dist float64) geom.Vec {
 		a := v.coneDir + rel
-		return geom.NewVec(v.origin.X+dist*math.Cos(a), v.origin.Y+dist*math.Sin(a))
+		return vec{v.origin.x + dist*math.Cos(a), v.origin.y + dist*math.Sin(a)}.vec32()
 	}
 
 	for i, s := range v.samples {
 		if i > 0 {
 			prev := v.samples[i-1]
 			if v.free(prev) && v.free(s) {
-				for a := prev.angle + maxArcStep; a < s.angle; a += maxArcStep {
+				for a := prev.angle + step; a < s.angle; a += step {
 					dst = append(dst, at(a, v.radius))
 				}
 			}
@@ -249,7 +250,7 @@ type candidate struct {
 	id       uid.UID64
 	dist     float64
 	span     arc
-	box      geom.AABB
+	box      rect
 	tau      float64
 	bottom   float64
 	top      float64
@@ -265,9 +266,11 @@ type collector struct {
 	space    QueryableSpace
 	observer uid.UID64
 	eyeBox   geom.AABB
-	origin   geom.Vec
+	origin   vec
 	cone     Cone
 	coneDir  float64
+	radius   float64
+	half     float64 // the cone's half-angle
 	edges    wedge
 	w, h     float64
 	wrapX    bool
@@ -291,28 +294,30 @@ func (c *collector) take(id uid.UID64) {
 		box = nearestImage(c.origin, box, wrapSize(c.w, c.wrapX), wrapSize(c.h, c.wrapY))
 	}
 	dist := boxDistance(c.eyeBox, box)
-	if dist > c.cone.Radius || c.edges.excludes(c.origin, box) {
+	if dist > c.radius || c.edges.excludes(c.origin, box) {
 		return
 	}
 	tau := 0.0
 	if c.cone.Transparency != nil {
-		tau = min(c.cone.Transparency(id), 1)
+		tau = min(float64(c.cone.Transparency(id)), 1)
 	}
-	span := subtendedArc(c.origin, box, c.coneDir, c.cone.HalfAngle)
+	span := subtendedArc(c.origin, box, c.coneDir, c.half)
 	if tau > 0 && surrounds(box, c.origin) {
-		span = arc{-c.cone.HalfAngle, c.cone.HalfAngle} // a see-through box around the eye dims the whole cone
+		span = arc{-c.half, c.half} // a see-through box around the eye dims the whole cone
 	}
 	if span.empty() {
 		return
 	}
-	cand := candidate{id: id, dist: dist, span: span, box: box, tau: tau, bottom: math.Inf(-1), top: math.Inf(1), standing: true, seenAt: math.Inf(1)}
+	cand := candidate{id: id, dist: dist, span: span, box: rectOf(box), tau: tau, bottom: math.Inf(-1), top: math.Inf(1), standing: true, seenAt: math.Inf(1)}
 	if c.cone.Elevation != nil {
-		cand.bottom, cand.top = c.cone.Elevation(id)
+		bottom, top := c.cone.Elevation(id)
+		cand.bottom, cand.top = float64(bottom), float64(top)
 	}
 	if c.cone.Ground != nil {
-		cand.foot = c.cone.Ground(centerOf(raw))
+		cand.foot = float64(c.cone.Ground(centerOf(raw).vec32()))
 	}
-	cand.standing = cand.bottom <= cand.foot+1e-6 // resting on the ground, not floating above it
+	// resting on the ground, not floating above it; the slack is a few float32 steps of the height
+	cand.standing = cand.bottom <= cand.foot+1e-6*max(1, math.Abs(cand.foot))
 	c.sc.dedup[id] = struct{}{}
 	c.sc.cands = append(c.sc.cands, cand)
 }
@@ -327,15 +332,15 @@ func (v *View) gather(
 	wrapX, wrapY bool,
 ) []candidate {
 	v.col = collector{
-		space: space, observer: observer, eyeBox: eyeBox, origin: v.origin,
-		cone: cone, coneDir: v.coneDir, edges: newWedge(v.coneDir, cone.HalfAngle),
+		space: space, observer: observer, eyeBox: eyeBox, origin: v.origin, cone: cone,
+		coneDir: v.coneDir, radius: v.radius, half: v.halfAngle, edges: newWedge(v.coneDir, v.halfAngle),
 		w: w, h: h, wrapX: wrapX, wrapY: wrapY, sc: &v.scratch,
 	}
 	if v.colFn == nil {
 		v.colFn = v.col.take
 	}
 
-	v.areas = searchAreas(v.origin, cone.Radius, w, h, wrapX, wrapY, v.areas[:0])
+	v.areas = searchAreas(v.origin, v.radius, w, h, wrapX, wrapY, v.areas[:0])
 	for _, r := range v.areas {
 		space.Query(r, v.colFn)
 	}

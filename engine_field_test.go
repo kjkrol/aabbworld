@@ -13,19 +13,19 @@ import (
 
 // wallField is solid ground on a grid of square cells.
 type wallField struct {
-	cell  float64
+	cell  float32
 	solid map[[2]int]bool
 	asked int
 }
 
-func newWallField(cell float64) *wallField { return &wallField{cell: cell, solid: map[[2]int]bool{}} }
+func newWallField(cell float32) *wallField { return &wallField{cell: cell, solid: map[[2]int]bool{}} }
 
 func (f *wallField) set(x, y int) { f.solid[[2]int{x, y}] = true }
 
 func (f *wallField) Solid(_ uid.UID64, box geom.AABB, visit func(collide.FieldBox) bool) {
 	f.asked++
-	x0, y0 := int(math.Floor(box.TopLeft.X/f.cell)), int(math.Floor(box.TopLeft.Y/f.cell))
-	x1, y1 := int(math.Ceil(box.BottomRight.X/f.cell)), int(math.Ceil(box.BottomRight.Y/f.cell))
+	x0, y0 := int(math.Floor(float64(box.TopLeft.X/f.cell))), int(math.Floor(float64(box.TopLeft.Y/f.cell)))
+	x1, y1 := int(math.Ceil(float64(box.BottomRight.X/f.cell))), int(math.Ceil(float64(box.BottomRight.Y/f.cell)))
 	for y := y0; y < y1; y++ {
 		for x := x0; x < x1; x++ {
 			if !f.solid[[2]int{x, y}] {
@@ -40,7 +40,7 @@ func (f *wallField) Solid(_ uid.UID64, box geom.AABB, visit func(collide.FieldBo
 					open |= n.side
 				}
 			}
-			b := geom.NewAABBAt(geom.NewVec(float64(x)*f.cell, float64(y)*f.cell), f.cell, f.cell)
+			b := geom.NewAABBAt(geom.NewVec(float32(x)*f.cell, float32(y)*f.cell), f.cell, f.cell)
 			if !visit(collide.FieldBox{Box: b, Cell: uint64(y)<<32 | uint64(x), Open: open}) {
 				return
 			}
@@ -79,7 +79,7 @@ func fieldScene(t *testing.T, field *wallField) (*scene, *fieldHooks) {
 }
 
 // wallRow is cells x0..x1 of row y, solid.
-func wallRow(cell float64, y, x0, x1 int) *wallField {
+func wallRow(cell float32, y, x0, x1 int) *wallField {
 	f := newWallField(cell)
 	for x := x0; x <= x1; x++ {
 		f.set(x, y)
@@ -200,7 +200,7 @@ func TestField_AStaticBoxNeverAsksTheGround(t *testing.T) {
 func TestField_TickDoesNotAllocateOnceWarm(t *testing.T) {
 	s, _ := fieldScene(t, wallRow(20, 10, 0, 9))
 	for i := range 20 {
-		s.put(uid.UID64(i+1), float64(i)*9, 192)
+		s.put(uid.UID64(i+1), float32(i)*9, 192)
 	}
 	s.hooks.moved = nil
 	s.space.Rebuild(s.items)

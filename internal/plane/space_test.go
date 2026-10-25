@@ -60,7 +60,7 @@ func TestSpace2dNormalizeVec(t *testing.T) {
 	}
 }
 
-func vec(x, y float64) geom.Vec {
+func vec(x, y float32) geom.Vec {
 	return geom.NewVec(x, y)
 }
 

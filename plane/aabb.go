@@ -26,7 +26,7 @@ type AABB struct {
 }
 
 // NewAABB builds a AABB at pos with the given size, not yet wrapped by any Space.
-func NewAABB(pos geom.Vec, width, height float64) AABB {
+func NewAABB(pos geom.Vec, width, height float32) AABB {
 	return AABB{
 		AABB: geom.AABB{
 			TopLeft:     pos,
@@ -90,7 +90,7 @@ func (ab AABB) visitImagePairs(other AABB, fn func(a, b geom.AABB) bool) {
 
 // hasFragments reports whether the box reaches past a world edge at all.
 func (ab AABB) hasFragments() bool {
-	var none float64
+	var none float32
 	return ab.Overhang.X > none || ab.Overhang.Y > none
 }
 
@@ -99,7 +99,7 @@ type FragVisitor func(pos FragPosition, box geom.AABB) bool
 
 // VisitFragments calls fn for each piece the box wraps into, until fn returns false.
 func (ab *AABB) VisitFragments(fn FragVisitor) {
-	var none float64
+	var none float32
 	dx, dy := ab.Overhang.X, ab.Overhang.Y
 
 	if dx > none {

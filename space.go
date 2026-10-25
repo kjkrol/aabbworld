@@ -123,7 +123,7 @@ func NewSpace(cfg Config) (*Space, error) {
 	if !iplane.Edges(cfg.Edges).Valid() {
 		return nil, fmt.Errorf("an axis cannot both wrap and be open")
 	}
-	surface := iplane.NewSurface(float64(cfg.Width), float64(cfg.Height), iplane.Edges(cfg.Edges))
+	surface := iplane.NewSurface(float32(cfg.Width), float32(cfg.Height), iplane.Edges(cfg.Edges))
 	grid := spatial.NewGrid(surface, spatial.ResolutionFrom(max(cfg.Width, cfg.Height)), spatial.ResolutionFrom(cfg.BucketSize))
 	s := &Space{Config: cfg, grid: grid, surface: surface}
 	s.read.s = s

@@ -13,13 +13,13 @@ import (
 )
 
 // band is an entity's bottom and top.
-type band [2]float64
+type band [2]float32
 
 // elevated gives the cone an eye height and every entity in bands its heights; the rest stand
 // from 0 to 2, like a walker.
-func elevated(c raycast.Cone, eye float64, bands map[uid.UID64]band) raycast.Cone {
+func elevated(c raycast.Cone, eye float32, bands map[uid.UID64]band) raycast.Cone {
 	c.Eye = eye
-	c.Elevation = func(id uid.UID64) (float64, float64) {
+	c.Elevation = func(id uid.UID64) (float32, float32) {
 		if b, ok := bands[id]; ok {
 			return b[0], b[1]
 		}
@@ -85,7 +85,7 @@ func TestElevation_AWallHigherThanTheEyeCutsTheGroundAndHidesTheWalker(t *testin
 func TestElevation_TheShadowOfALowWallEndsWhereTheSightlineMeetsTheGround(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		at   float64
+		at   float32
 		seen bool
 	}{
 		{"just inside the shadow", 290, false},
@@ -129,7 +129,7 @@ func TestElevation_AForestUnderTheHawkDoesNotDimItsSight(t *testing.T) {
 	s.put(forest, 355, 55, 100, 100)
 	s.put(coin, 505, 105, 1, 1)
 	bands := map[uid.UID64]band{forest: {0, 8}, coin: {0, 0.5}}
-	taus := map[uid.UID64]float64{forest: 0.5}
+	taus := map[uid.UID64]float32{forest: 0.5}
 
 	assertVisible(t, visible(t, s, eye, seeThrough(elevated(eastward(math.Pi/8, 401), 100, bands), taus)), forest, coin)
 	assertVisible(t, visible(t, s, eye, seeThrough(elevated(eastward(math.Pi/8, 401), 1.5, bands), taus)), forest)
@@ -137,7 +137,7 @@ func TestElevation_AForestUnderTheHawkDoesNotDimItsSight(t *testing.T) {
 }
 
 // plateau is ground 20 high for x in [300, 400), 0 elsewhere.
-func plateau(p geom.Vec) float64 {
+func plateau(p geom.Vec) float32 {
 	if p.X >= 300 && p.X < 400 {
 		return 20
 	}
@@ -184,7 +184,7 @@ func TestElevation_GroundIsSampledOnTheWrappedWorld(t *testing.T) {
 	s.put(walker, 150, 100, 10, 10) // 250 ahead across the seam
 	sampled := map[bool]int{}
 	cone := elevated(eastward(math.Pi/8, 400), 1.5, nil)
-	cone.Ground = func(p geom.Vec) float64 {
+	cone.Ground = func(p geom.Vec) float32 {
 		sampled[p.X >= 0 && p.X < 1000] += 1
 		return 0
 	}
@@ -197,7 +197,7 @@ func TestElevation_GroundIsSampledOnTheWrappedWorld(t *testing.T) {
 
 func TestElevation_WithoutHeightsTheEyeChangesNothing(t *testing.T) {
 	s := forestScene()
-	taus := map[uid.UID64]float64{forest: 0.5}
+	taus := map[uid.UID64]float32{forest: 0.5}
 	flat := seeThrough(eastward(math.Pi/8, 501), taus)
 	raised := flat
 	raised.Eye = 100
@@ -218,27 +218,27 @@ func elevatedScene(r *rand.Rand) (*fakeSpace, elevatedOracle) {
 	for _, id := range slices.Sorted(maps.Keys(boxes)) {
 		switch {
 		case id%5 == 0:
-			o.bands[id] = band{30 + 4*r.Float64(), 34 + 4*r.Float64()}
+			o.bands[id] = band{float32(30 + 4*r.Float64()), float32(34 + 4*r.Float64())}
 		case id%2 == 0:
 			o.bands[id] = band{0, 2}
 		default:
-			o.bands[id] = band{0, 4 + 8*r.Float64()}
+			o.bands[id] = band{0, float32(4 + 8*r.Float64())}
 		}
 	}
-	o.ground = func(p geom.Vec) float64 { return 5 + 5*math.Sin(p.X/90)*math.Cos(p.Y/70) }
+	o.ground = func(p geom.Vec) float32 { return float32(5 + 5*math.Sin(float64(p.X)/90)*math.Cos(float64(p.Y)/70)) }
 	for id, b := range boxes {
 		bb := o.bands[id]
 		if bb[0] == 0 {
-			foot := o.ground(geom.NewVec((b[0]+b[2])/2, (b[1]+b[3])/2))
+			foot := o.ground(geom.NewVec(float32((b[0]+b[2])/2), float32((b[1]+b[3])/2)))
 			o.bands[id] = band{foot, foot + bb[1]}
 		}
 	}
 	return s, o
 }
 
-func (o elevatedOracle) cone(dir, halfAngle, radius float64) raycast.Cone {
+func (o elevatedOracle) cone(dir float64, halfAngle, radius float32) raycast.Cone {
 	c := seeThrough(elevated(raycast.Cone{
-		Direction: geom.NewVec(math.Cos(dir), math.Sin(dir)), HalfAngle: halfAngle, Radius: radius,
+		Direction: geom.NewVec(float32(math.Cos(dir)), float32(math.Sin(dir))), HalfAngle: halfAngle, Radius: radius,
 	}, o.eye, o.bands), o.taus)
 	c.Ground, c.GroundStep = o.ground, o.step
 	return c
@@ -254,9 +254,10 @@ func TestElevation_DepthsMatchRaysCastDirectly(t *testing.T) {
 
 		v := scan(t, s, eye, cone)
 		const k = 33
-		step := 2 * cone.HalfAngle / float64(k-1)
+		half := float64(cone.HalfAngle)
+		step := 2 * half / float64(k-1)
 		for i, d := range v.Depths(k, nil) {
-			want, _ := o.cast(origin, coneDir-cone.HalfAngle+float64(i)*step, cone.Radius)
+			want, _ := o.cast(origin, coneDir-half+float64(i)*step, float64(cone.Radius))
 			if math.Abs(float64(d)-want) > 1e-3 {
 				t.Errorf("trial %d: depth %d = %.4f, casting that ray gives %.4f", trial, i, d, want)
 			}
@@ -272,14 +273,14 @@ func TestElevation_MissesNothingADenseFanOfRaysReaches(t *testing.T) {
 		origin := geom.NewVec(2005.0, 2005.0)
 
 		got := visible(t, s, eye, cone)
-		dir := float64(trial)
+		dir, half := float64(trial), float64(cone.HalfAngle)
 		const steps = 4000
 		arcs := map[uid.UID64]float64{}
 		for i := 0; i <= steps; i++ {
-			a := dir - cone.HalfAngle + 2*cone.HalfAngle*float64(i)/float64(steps)
-			_, seen := o.cast(origin, a, cone.Radius)
+			a := dir - half + 2*half*float64(i)/float64(steps)
+			_, seen := o.cast(origin, a, float64(cone.Radius))
 			for id := range seen {
-				arcs[id] += 2 * cone.HalfAngle / steps
+				arcs[id] += 2 * half / steps
 			}
 		}
 		for id, a := range arcs {
@@ -301,7 +302,7 @@ func TestElevation_ScanDoesNotAllocateOnceWarm(t *testing.T) {
 	shadows := make([]raycast.Shadow, 0, 512)
 	allocs := testing.AllocsPerRun(20, func() {
 		v.Scan(s, eye, cone)
-		v.Entities(func(uid.UID64, float64) {})
+		v.Entities(func(uid.UID64, float32) {})
 		depths = v.Depths(63, depths[:0])
 		pts = v.Outline(0, pts[:0])
 		shadows = v.Shadows(63, shadows[:0])
@@ -339,7 +340,7 @@ func TestShadows_AHillHidesTheLowlandBehindIt(t *testing.T) {
 }
 
 // valley is the plateau of 20 on [300, 340), a dip back to 0, and a steep far slope from 480 on.
-func valley(p geom.Vec) float64 {
+func valley(p geom.Vec) float32 {
 	switch {
 	case p.X >= 300 && p.X < 340:
 		return 20
@@ -387,15 +388,16 @@ func TestShadows_MatchWhatTheOracleSees(t *testing.T) {
 		cone := o.cone(coneDir, math.Pi/4, 500)
 		origin := geom.NewVec(2005.0, 2005.0)
 		const k = 17
-		step := 2 * cone.HalfAngle / float64(k-1)
+		half, radius := float64(cone.HalfAngle), float64(cone.Radius)
+		step := 2 * half / float64(k-1)
 		shadows := scan(t, s, eye, cone).Shadows(k, nil)
 		for i := range k {
-			_, _, ground := o.castAll(origin, coneDir-cone.HalfAngle+float64(i)*step, cone.Radius)
+			_, _, ground := o.castAll(origin, coneDir-half+float64(i)*step, radius)
 			for _, g := range ground {
 				inShadow := false
 				for _, sh := range shadows {
 					to := float64(sh.To)
-					if sh.Sample == i && float64(sh.From) < g.dist && (g.dist < to || g.dist == cone.Radius && to == cone.Radius) {
+					if sh.Sample == i && float64(sh.From) < g.dist && (g.dist < to || g.dist == radius && to == radius) {
 						inShadow = true
 					}
 				}

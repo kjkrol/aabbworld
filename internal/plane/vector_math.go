@@ -16,7 +16,7 @@ func Wrap(v, size geom.Vec) geom.Vec {
 	return geom.Vec{X: wrap(v.X, size.X), Y: wrap(v.Y, size.Y)}
 }
 
-func clamp(val, max float64) float64 {
+func clamp(val, max float32) float32 {
 	if val > max {
 		return max
 	}
@@ -27,7 +27,7 @@ func clamp(val, max float64) float64 {
 }
 
 // wrap folds val into [0,max).
-func wrap(val, max float64) float64 {
+func wrap(val, max float32) float32 {
 	if max == 0 {
 		return val
 	}
@@ -38,16 +38,21 @@ func wrap(val, max float64) float64 {
 	if val >= 0 && val < max {
 		return val
 	}
-	if val >= max && val < max+max {
-		return val - max
+	var r float32
+	switch {
+	case val >= max && val < max+max:
+		r = val - max
+	case val < 0 && val >= -max:
+		r = val + max
+	default:
+		r = float32(math.Mod(float64(val), float64(max)))
+		if r < 0 {
+			r += max
+		}
 	}
-	if val < 0 && val >= -max {
-		return val + max
-	}
-
-	r := math.Mod(val, max)
-	if r < 0 {
-		r += max
+	// A value a hair below zero rounds up to max once max is added to it.
+	if r >= max {
+		return 0
 	}
 	return r
 }

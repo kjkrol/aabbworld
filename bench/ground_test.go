@@ -39,8 +39,8 @@ func (g *wallGround) at(x, y int) bool {
 }
 
 func (g *wallGround) Solid(_ uid.UID64, box geom.AABB, visit func(collide.FieldBox) bool) {
-	x0, y0 := int(math.Floor(box.TopLeft.X/groundCell)), int(math.Floor(box.TopLeft.Y/groundCell))
-	x1, y1 := int(math.Ceil(box.BottomRight.X/groundCell)), int(math.Ceil(box.BottomRight.Y/groundCell))
+	x0, y0 := int(math.Floor(float64(box.TopLeft.X/groundCell))), int(math.Floor(float64(box.TopLeft.Y/groundCell)))
+	x1, y1 := int(math.Ceil(float64(box.BottomRight.X/groundCell))), int(math.Ceil(float64(box.BottomRight.Y/groundCell)))
 	for y := y0; y < y1; y++ {
 		for x := x0; x < x1; x++ {
 			if !g.at(x, y) {
@@ -59,7 +59,7 @@ func (g *wallGround) Solid(_ uid.UID64, box geom.AABB, visit func(collide.FieldB
 			if !g.at(x, y+1) {
 				open |= collide.Bottom
 			}
-			b := geom.NewAABBAt(geom.NewVec(float64(x)*groundCell, float64(y)*groundCell), groundCell, groundCell)
+			b := geom.NewAABBAt(geom.NewVec(float32(x)*groundCell, float32(y)*groundCell), groundCell, groundCell)
 			if !visit(collide.FieldBox{Box: b, Cell: uint64(y*groundSide + x), Open: open}) {
 				return
 			}
@@ -74,10 +74,10 @@ type segmentGround struct{ *wallGround }
 func (g segmentGround) Solid(uid.UID64, geom.AABB, func(collide.FieldBox) bool) {}
 
 func (g segmentGround) Walls(_ uid.UID64, box geom.AABB, visit func(collide.FieldWall) bool) {
-	x0 := int(math.Floor(box.TopLeft.X / groundCell))
-	y0 := int(math.Floor(box.TopLeft.Y / groundCell))
-	x1 := int(math.Ceil(box.BottomRight.X / groundCell))
-	y1 := int(math.Ceil(box.BottomRight.Y / groundCell))
+	x0 := int(math.Floor(float64(box.TopLeft.X / groundCell)))
+	y0 := int(math.Floor(float64(box.TopLeft.Y / groundCell)))
+	x1 := int(math.Ceil(float64(box.BottomRight.X / groundCell)))
+	y1 := int(math.Ceil(float64(box.BottomRight.Y / groundCell)))
 	for y := y0; y < y1; y++ {
 		for x := x0; x < x1; x++ {
 			if !g.at(x, y) {
@@ -90,9 +90,9 @@ func (g segmentGround) Walls(_ uid.UID64, box geom.AABB, visit func(collide.Fiel
 			if !g.at(x+1, y) {
 				open |= collide.EndB
 			}
-			mid := (float64(y) + 0.5) * groundCell
-			w := collide.FieldWall{A: geom.NewVec(float64(x)*groundCell, mid),
-				B: geom.NewVec(float64(x+1)*groundCell, mid), Half: groundCell / 2,
+			mid := (float32(y) + 0.5) * groundCell
+			w := collide.FieldWall{A: geom.NewVec(float32(x)*groundCell, mid),
+				B: geom.NewVec(float32(x+1)*groundCell, mid), Half: groundCell / 2,
 				Cell: uint64(y*groundSide + x), Open: open}
 			if !visit(w) {
 				return
@@ -113,8 +113,8 @@ func groundUnitsAt() []aabbworld.Item {
 	var items []aabbworld.Item
 	for i := range groundUnits {
 		row := 5 + 10*(i%10)
-		x := float64(1+(i/10)%9)*groundCell + float64(i/90)*2 + 3
-		items = append(items, aabbworld.Item{ID: uid.UID64(1 + i), Box: plane.NewAABB(geom.NewVec(x+float64(i/10/9)*200, float64(row)*groundCell-8), 10, 10), Caps: aabbworld.CanCollide})
+		x := float32(1+(i/10)%9)*groundCell + float32(i/90)*2 + 3
+		items = append(items, aabbworld.Item{ID: uid.UID64(1 + i), Box: plane.NewAABB(geom.NewVec(x+float32(i/10/9)*200, float32(row)*groundCell-8), 10, 10), Caps: aabbworld.CanCollide})
 	}
 	return items
 }
@@ -128,7 +128,7 @@ func Benchmark_Collide_Ground(b *testing.B) {
 	for y := range groundSide {
 		for x := 0; x < groundSide; x++ {
 			if groundWall(x, y) {
-				cells = append(cells, aabbworld.Item{ID: id, Box: plane.NewAABB(geom.NewVec(float64(x)*groundCell, float64(y)*groundCell), groundCell, groundCell), Caps: aabbworld.CanCollide | aabbworld.Static})
+				cells = append(cells, aabbworld.Item{ID: id, Box: plane.NewAABB(geom.NewVec(float32(x)*groundCell, float32(y)*groundCell), groundCell, groundCell), Caps: aabbworld.CanCollide | aabbworld.Static})
 				id++
 			}
 			if groundWall(x, y) && !groundWall(x-1, y) {
@@ -136,7 +136,7 @@ func Benchmark_Collide_Ground(b *testing.B) {
 				for groundWall(x+n, y) && x+n < groundSide {
 					n++
 				}
-				runs = append(runs, aabbworld.Item{ID: id, Box: plane.NewAABB(geom.NewVec(float64(x)*groundCell, float64(y)*groundCell), float64(n)*groundCell, groundCell), Caps: aabbworld.CanCollide | aabbworld.Static})
+				runs = append(runs, aabbworld.Item{ID: id, Box: plane.NewAABB(geom.NewVec(float32(x)*groundCell, float32(y)*groundCell), float32(n)*groundCell, groundCell), Caps: aabbworld.CanCollide | aabbworld.Static})
 				id++
 			}
 		}

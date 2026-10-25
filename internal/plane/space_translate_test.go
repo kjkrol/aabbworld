@@ -185,7 +185,7 @@ func expectAABBFragments(t *testing.T, b plane.AABB, expected map[plane.FragPosi
 
 func TestTranslate_InsideOrTouchingTheEdgeAgreesWithTheFold(t *testing.T) {
 	// before is the rule of an axis as it was when every box was folded.
-	before := func(lo, length, world float64, wraps, open bool) (float64, float64, float64) {
+	before := func(lo, length, world float32, wraps, open bool) (float32, float32, float32) {
 		switch {
 		case wraps:
 			return fold(lo, length, world)
@@ -198,7 +198,7 @@ func TestTranslate_InsideOrTouchingTheEdgeAgreesWithTheFold(t *testing.T) {
 	}
 
 	// A 10-long box from 50 lands at 0, at world-10, well inside, and 5 past the edge.
-	pushes := []float64{-50, 40, -13, 45}
+	pushes := []float32{-50, 40, -13, 45}
 	for _, tc := range []struct {
 		name  string
 		edges Edges

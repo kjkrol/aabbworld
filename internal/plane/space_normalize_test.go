@@ -26,7 +26,7 @@ func TestEuclidean2D_normalizeBox(t *testing.T) {
 type normalizeScenario struct {
 	name                string
 	topLeft             geom.Vec
-	width, height       float64
+	width, height       float32
 	expectedTopLeft     geom.Vec
 	expectedBottomRight geom.Vec
 }
@@ -235,8 +235,8 @@ func convertFragments(frags map[plane.FragPosition][2]geom.Vec) map[plane.FragPo
 	converted := make(map[plane.FragPosition][2]geom.Vec, len(frags))
 	for pos, vecs := range frags {
 		converted[pos] = [2]geom.Vec{
-			geom.NewVec(float64(vecs[0].X), float64(vecs[0].Y)),
-			geom.NewVec(float64(vecs[1].X), float64(vecs[1].Y)),
+			geom.NewVec(float32(vecs[0].X), float32(vecs[0].Y)),
+			geom.NewVec(float32(vecs[1].X), float32(vecs[1].Y)),
 		}
 	}
 

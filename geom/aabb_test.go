@@ -3,7 +3,7 @@ package geom
 import "testing"
 
 func TestAABB_Intersects(t *testing.T) {
-	mk := func(x, y, w, h float64) AABB {
+	mk := func(x, y, w, h float32) AABB {
 		return NewAABBAt(NewVec(x, y), w, h)
 	}
 

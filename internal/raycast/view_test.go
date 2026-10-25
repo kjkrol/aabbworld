@@ -17,10 +17,10 @@ func scene(seed uint64) (*fakeSpace, raycast.Cone) {
 	s.put(eye, 2000, 2000, 10, 10)
 	for i := range 24 - 22*int(seed%2) {
 		s.put(uid.UID64(100+i),
-			float64(2100+i*90+r.IntN(40)), float64(1700+r.IntN(600)),
-			float64(20+r.IntN(40)), float64(20+r.IntN(40)))
+			float32(2100+i*90+r.IntN(40)), float32(1700+r.IntN(600)),
+			float32(20+r.IntN(40)), float32(20+r.IntN(40)))
 	}
-	return s, eastward(math.Pi/3+float64(seed%3)*0.2, 500+float64(r.IntN(400)))
+	return s, eastward(float32(math.Pi/3+float64(seed%3)*0.2), float32(500+r.IntN(400)))
 }
 
 // freshScan answers through a View that has never been used.
@@ -31,13 +31,13 @@ func freshScan(t *testing.T, s raycast.QueryableSpace, c raycast.Cone) ([]seenPa
 		t.Fatal("Scan failed on a fresh View")
 	}
 	var got []seenPair
-	v.Entities(func(id uid.UID64, d float64) { got = append(got, seenPair{id, d}) })
+	v.Entities(func(id uid.UID64, d float32) { got = append(got, seenPair{id, d}) })
 	return got, v.Outline(0, nil)
 }
 
 type seenPair struct {
 	id   uid.UID64
-	dist float64
+	dist float32
 }
 
 func TestView_ReusedAcrossScansMatchesOneShotCalls(t *testing.T) {
@@ -53,7 +53,7 @@ func TestView_ReusedAcrossScansMatchesOneShotCalls(t *testing.T) {
 		}
 
 		var gotIDs []seenPair
-		n := v.Entities(func(id uid.UID64, d float64) { gotIDs = append(gotIDs, seenPair{id, d}) })
+		n := v.Entities(func(id uid.UID64, d float32) { gotIDs = append(gotIDs, seenPair{id, d}) })
 		if n != len(wantIDs) {
 			t.Fatalf("seed %d: Entities = %d, a fresh View reports %d", seed, n, len(wantIDs))
 		}
@@ -84,7 +84,7 @@ func TestView_ZeroValueIsUsable(t *testing.T) {
 	if !v.Scan(s, eye, eastward(math.Pi/4, 500)) {
 		t.Fatal("Scan on a zero-value View failed")
 	}
-	if n := v.Entities(func(uid.UID64, float64) {}); n != 1 {
+	if n := v.Entities(func(uid.UID64, float32) {}); n != 1 {
 		t.Errorf("Entities = %d, want 1", n)
 	}
 	if pts := v.Outline(0, nil); len(pts) == 0 {
@@ -114,7 +114,7 @@ func TestView_ReadsNothingWithoutASuccessfulScan(t *testing.T) {
 			v := &raycast.View{}
 			tc.setup(v)
 
-			if n := v.Entities(func(uid.UID64, float64) { t.Error("fn called") }); n != 0 {
+			if n := v.Entities(func(uid.UID64, float32) { t.Error("fn called") }); n != 0 {
 				t.Errorf("Entities = %d, want 0", n)
 			}
 			dst := []geom.Vec{{X: 1, Y: 2}}

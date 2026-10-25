@@ -12,7 +12,7 @@ import (
 // and leaves the cell, the band the cover spans (bottom, top; ±Inf without heights) and how
 // see-through it is (tau: ≤ 0 blocks, 1 is empty). visit returning false ends the walk.
 type CoverField interface {
-	Walk(origin, dir geom.Vec, length float64, visit func(near, far, bottom, top, tau float64) bool)
+	Walk(origin, dir geom.Vec, length float32, visit func(near, far, bottom, top, tau float32) bool)
 }
 
 // noCut marks a cast that ended on no wall; a crossing's idx below it names a stretch of cover.
@@ -34,7 +34,7 @@ type coverWalk struct {
 	// nothing else on the ray is see-through.
 	flat, byBudget bool
 	pos, budget    float64
-	visit          func(near, far, bottom, top, tau float64) bool
+	visit          func(near, far, bottom, top, tau float32) bool
 }
 
 // take records one stretch of cover and says whether the walk goes on.
@@ -66,18 +66,20 @@ func (w *coverWalk) take(near, far, bottom, top, tau float64) bool {
 // walkCover gathers the cover along one ray, up to length, into sc.cover: on a plane (flat) up to
 // the first wall, and no further than budget when nothing else on the ray is see-through
 // (budget > 0); with heights all of it, bands included.
-func (sc *scratch) walkCover(origin, dir geom.Vec, length float64, flat bool, budget float64) {
+func (sc *scratch) walkCover(origin, dir vec, length float64, flat bool, budget float64) {
 	w := &sc.cover
 	w.near, w.far, w.tau, w.stretches = w.near[:0], w.far[:0], w.tau[:0], w.stretches[:0]
 	if sc.field == nil || length <= 0 {
 		return
 	}
 	if w.visit == nil {
-		w.visit = w.take
+		w.visit = func(near, far, bottom, top, tau float32) bool {
+			return w.take(float64(near), float64(far), float64(bottom), float64(top), float64(tau))
+		}
 	}
 	w.flat, w.heights = flat, !flat
 	w.byBudget, w.pos, w.budget = flat && budget > 0, 0, budget
-	sc.field.Walk(origin, dir, length, w.visit)
+	sc.field.Walk(origin.vec32(), dir.vec32(), float32(length), w.visit)
 }
 
 // crossingOf is the k-th stretch of cover as a crossing of the current cast.

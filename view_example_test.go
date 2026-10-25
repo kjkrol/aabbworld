@@ -42,7 +42,7 @@ func ExampleView() {
 			continue
 		}
 
-		view.Entities(func(id uid.UID64, dist float64) {
+		view.Entities(func(id uid.UID64, dist float32) {
 			if tick == 1 {
 				fmt.Printf("sees %d at %.0f\n", id, dist)
 			}

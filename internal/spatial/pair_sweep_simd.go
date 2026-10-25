@@ -9,16 +9,16 @@ import (
 	"slices"
 )
 
-// wide says crowded cells are swept four entries at a time; tests turn it off to compare. The
+// wide says crowded cells are swept eight entries at a time; tests turn it off to compare. The
 // masks are joined with VPAND on 256 bits, which takes AVX2.
 var wide = archsimd.X86.AVX2()
 
-// sweepCols is a cell's boxes one edge to a slice, so four neighbours load at once. Each slice
-// runs three past the cell, for loads that start near its end.
-type sweepCols struct{ minX, minY, maxX, maxY []float64 }
+// sweepCols is a cell's boxes one edge to a slice, so eight neighbours load at once. Each slice
+// runs seven past the cell, for loads that start near its end.
+type sweepCols struct{ minX, minY, maxX, maxY []float32 }
 
 func (c *sweepCols) fill(entries []sweepEntry) {
-	n := len(entries) + 3
+	n := len(entries) + 7
 	c.minX, c.minY = slices.Grow(c.minX[:0], n)[:n], slices.Grow(c.minY[:0], n)[:n]
 	c.maxX, c.maxY = slices.Grow(c.maxX[:0], n)[:n], slices.Grow(c.maxY[:0], n)[:n]
 	for i := range entries {
@@ -28,27 +28,27 @@ func (c *sweepCols) fill(entries []sweepEntry) {
 	}
 }
 
-// visitWide tests every two entries of one cell, entry i against four of the rest at once, and
+// visitWide tests every two entries of one cell, entry i against eight of the rest at once, and
 // takes the pairs this cell owns.
 func (s *pairSweep) visitWide(entries []sweepEntry, cx, cy uint32, fn func(a, b int32)) {
 	c := &s.cols
 	c.fill(entries)
 	n := len(entries)
 	// Both entries reach this cell, so the overlap's top-left corner lies in it or before it.
-	ownX, ownY := archsimd.BroadcastFloat64x4(s.edge(cx)), archsimd.BroadcastFloat64x4(s.edge(cy))
+	ownX, ownY := archsimd.BroadcastFloat32x8(s.edge(cx)), archsimd.BroadcastFloat32x8(s.edge(cy))
 	for i := range n - 1 {
-		ax1, ay1 := archsimd.BroadcastFloat64x4(c.minX[i]), archsimd.BroadcastFloat64x4(c.minY[i])
-		ax2, ay2 := archsimd.BroadcastFloat64x4(c.maxX[i]), archsimd.BroadcastFloat64x4(c.maxY[i])
-		for j := i + 1; j < n; j += 4 {
-			bx1 := archsimd.LoadFloat64x4Array((*[4]float64)(c.minX[j : j+4]))
-			by1 := archsimd.LoadFloat64x4Array((*[4]float64)(c.minY[j : j+4]))
-			bx2 := archsimd.LoadFloat64x4Array((*[4]float64)(c.maxX[j : j+4]))
-			by2 := archsimd.LoadFloat64x4Array((*[4]float64)(c.maxY[j : j+4]))
+		ax1, ay1 := archsimd.BroadcastFloat32x8(c.minX[i]), archsimd.BroadcastFloat32x8(c.minY[i])
+		ax2, ay2 := archsimd.BroadcastFloat32x8(c.maxX[i]), archsimd.BroadcastFloat32x8(c.maxY[i])
+		for j := i + 1; j < n; j += 8 {
+			bx1 := archsimd.LoadFloat32x8Array((*[8]float32)(c.minX[j : j+8]))
+			by1 := archsimd.LoadFloat32x8Array((*[8]float32)(c.minY[j : j+8]))
+			bx2 := archsimd.LoadFloat32x8Array((*[8]float32)(c.maxX[j : j+8]))
+			by2 := archsimd.LoadFloat32x8Array((*[8]float32)(c.maxY[j : j+8]))
 			touch := ax1.LessEqual(bx2).And(ax2.GreaterEqual(bx1)).
 				And(ay1.LessEqual(by2)).And(ay2.GreaterEqual(by1))
 			own := ax1.Max(bx1).GreaterEqual(ownX).And(ay1.Max(by1).GreaterEqual(ownY))
 			hits := touch.And(own).ToBits()
-			if left := n - j; left < 4 {
+			if left := n - j; left < 8 {
 				hits &= 1<<left - 1
 			}
 			if hits == 0 {
@@ -70,9 +70,9 @@ func (s *pairSweep) visitWide(entries []sweepEntry, cx, cy uint32, fn func(a, b 
 }
 
 // edge is where column or row n begins as cellOf counts, the first running on from minus infinity.
-func (s *pairSweep) edge(n uint32) float64 {
+func (s *pairSweep) edge(n uint32) float32 {
 	if n == 0 {
-		return math.Inf(-1)
+		return float32(math.Inf(-1))
 	}
-	return float64(uint64(n) << s.shift)
+	return float32(uint64(n) << s.shift)
 }

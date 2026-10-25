@@ -38,7 +38,7 @@ type WallField interface {
 // round a free end where that is the shorter way.
 type FieldWall struct {
 	A, B geom.Vec
-	Half float64
+	Half float32
 	Cell uint64
 	Open Ends
 }

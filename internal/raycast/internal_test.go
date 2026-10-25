@@ -69,25 +69,25 @@ func TestSplitAxis(t *testing.T) {
 
 func TestHitDistance(t *testing.T) {
 	box := geom.NewAABB(geom.NewVec(10.0, 10.0), geom.NewVec(20.0, 20.0))
-	origin := geom.NewVec(0.0, 15.0)
+	origin := vec{0.0, 15.0}
 
 	cases := map[string]struct {
-		origin, dir geom.Vec
+		origin, dir vec
 		near, far   float64
 		hit         bool
 	}{
-		"straight at it, parallel to Y":   {origin, geom.NewVec(1.0, 0.0), 10, 20, true},
-		"parallel but above the slab":     {geom.NewVec(0.0, 5.0), geom.NewVec(1.0, 0.0), 0, 0, false},
-		"parallel but below the slab":     {geom.NewVec(0.0, 25.0), geom.NewVec(1.0, 0.0), 0, 0, false},
-		"parallel to X, straight down":    {geom.NewVec(15.0, 0.0), geom.NewVec(0.0, 1.0), 10, 20, true},
-		"pointing away":                   {origin, geom.NewVec(-1.0, 0.0), 0, 0, false},
-		"diagonal miss":                   {geom.NewVec(0.0, 0.0), geom.NewVec(0.0, 1.0), 0, 0, false},
-		"starting inside hits at zero":    {geom.NewVec(15.0, 15.0), geom.NewVec(1.0, 0.0), 0, 5, true},
-		"diagonal hit through the corner": {geom.NewVec(0.0, 0.0), geom.NewVec(0.7071067811865476, 0.7071067811865476), 14.142135623730951, 28.284271247461902, true},
+		"straight at it, parallel to Y":   {origin, vec{1.0, 0.0}, 10, 20, true},
+		"parallel but above the slab":     {vec{0.0, 5.0}, vec{1.0, 0.0}, 0, 0, false},
+		"parallel but below the slab":     {vec{0.0, 25.0}, vec{1.0, 0.0}, 0, 0, false},
+		"parallel to X, straight down":    {vec{15.0, 0.0}, vec{0.0, 1.0}, 10, 20, true},
+		"pointing away":                   {origin, vec{-1.0, 0.0}, 0, 0, false},
+		"diagonal miss":                   {vec{0.0, 0.0}, vec{0.0, 1.0}, 0, 0, false},
+		"starting inside hits at zero":    {vec{15.0, 15.0}, vec{1.0, 0.0}, 0, 5, true},
+		"diagonal hit through the corner": {vec{0.0, 0.0}, vec{0.7071067811865476, 0.7071067811865476}, 14.142135623730951, 28.284271247461902, true},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			near, far, ok := hitDistance(tc.origin, tc.dir, box)
+			near, far, ok := hitDistance(tc.origin, tc.dir, rectOf(box))
 			if ok != tc.hit {
 				t.Fatalf("hitDistance hit = %v, want %v", ok, tc.hit)
 			}

@@ -62,7 +62,7 @@ func newCrowd(rng *rand.Rand, surface *iplane.Surface, count int, field float64)
 	c := crowd{items: make([]spatial.Item, count)}
 	pinned := make([]bool, count)
 	for i := range c.items {
-		box := surface.WrapAABB(plane.NewAABB(geom.NewVec(rng.Float64()*field, rng.Float64()*field), 10, 10).AABB)
+		box := surface.WrapAABB(plane.NewAABB(geom.NewVec(float32(rng.Float64()*field), float32(rng.Float64()*field)), 10, 10).AABB)
 		c.items[i] = spatial.Item{ID: uid.UID64(i + 1), Box: box}
 		pinned[i] = rng.IntN(10) == 0
 	}

@@ -20,7 +20,7 @@ type crowd struct {
 	items []aabbworld.Item
 }
 
-func (c *crowd) add(x, y, w, h float64, caps aabbworld.Capability) {
+func (c *crowd) add(x, y, w, h float32, caps aabbworld.Capability) {
 	box := c.space.WrapAABB(plane.NewAABB(geom.NewVec(x, y), w, h).AABB)
 	c.items = append(c.items, aabbworld.Item{ID: uid.UID64(len(c.items)), Box: box, Caps: caps})
 }
@@ -46,13 +46,13 @@ func (h *hooks) Moved(uid.UID64, plane.AABB)            {}
 type broadPhaseScene struct {
 	name   string
 	bucket uint32
-	margin float64 // what a probe per entity reaches: the smallest side
+	margin float32 // what a probe per entity reaches: the smallest side
 	groups []sceneGroup
 }
 
 type sceneGroup struct {
 	count int
-	side  float64
+	side  float32
 }
 
 var broadPhaseScenes = []broadPhaseScene{
@@ -75,7 +75,7 @@ func (sc broadPhaseScene) build(b *testing.B) *crowd {
 	rng := rand.New(rand.NewPCG(41, 43))
 	for _, g := range sc.groups {
 		for range g.count {
-			c.add(rng.Float64()*2048, rng.Float64()*2048, g.side, g.side, aabbworld.CanCollide)
+			c.add(float32(rng.Float64()*2048), float32(rng.Float64()*2048), g.side, g.side, aabbworld.CanCollide)
 		}
 	}
 	c.rebuild()
@@ -83,7 +83,7 @@ func (sc broadPhaseScene) build(b *testing.B) *crowd {
 }
 
 // grown is the whole of b, seam pieces and all, reaching margin further on every side.
-func grown(b plane.AABB, margin float64) geom.AABB {
+func grown(b plane.AABB, margin float32) geom.AABB {
 	return geom.NewAABB(
 		geom.NewVec(b.TopLeft.X-margin, b.TopLeft.Y-margin),
 		geom.NewVec(b.TopLeft.X+b.Size.X+margin, b.TopLeft.Y+b.Size.Y+margin),

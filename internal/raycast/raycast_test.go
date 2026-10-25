@@ -24,7 +24,7 @@ func newFake(w, h float64, toroidal bool) *fakeSpace {
 	return &fakeSpace{boxes: map[uid.UID64]geom.AABB{}, w: w, h: h, toroidal: toroidal}
 }
 
-func (f *fakeSpace) put(id uid.UID64, x, y, w, h float64) {
+func (f *fakeSpace) put(id uid.UID64, x, y, w, h float32) {
 	f.boxes[id] = geom.NewAABBAt(geom.NewVec(x, y), w, h)
 }
 
@@ -58,7 +58,7 @@ func (f *fakeSpace) Query(area geom.AABB, fn func(uid.UID64)) int {
 }
 
 // eastward looks along +X with the given half-angle and reach.
-func eastward(halfAngle, radius float64) raycast.Cone {
+func eastward(halfAngle, radius float32) raycast.Cone {
 	return raycast.Cone{Direction: geom.NewVec(1.0, 0.0), HalfAngle: halfAngle, Radius: radius}
 }
 
@@ -73,14 +73,14 @@ func scan(t *testing.T, s raycast.QueryableSpace, observer uid.UID64, c raycast.
 func visible(t *testing.T, s raycast.QueryableSpace, observer uid.UID64, c raycast.Cone) map[uid.UID64]bool {
 	t.Helper()
 	got := map[uid.UID64]bool{}
-	n := scan(t, s, observer, c).Entities(func(id uid.UID64, _ float64) { got[id] = true })
+	n := scan(t, s, observer, c).Entities(func(id uid.UID64, _ float32) { got[id] = true })
 	if n != len(got) {
 		t.Errorf("Entities returned %d but reported %d distinct ids", n, len(got))
 	}
 	return got
 }
 
-func outline(t *testing.T, s raycast.QueryableSpace, observer uid.UID64, c raycast.Cone, step float64) []geom.Vec {
+func outline(t *testing.T, s raycast.QueryableSpace, observer uid.UID64, c raycast.Cone, step float32) []geom.Vec {
 	t.Helper()
 	return scan(t, s, observer, c).Outline(step, nil)
 }
@@ -142,7 +142,7 @@ func TestVisible_SideBySideEntitiesDoNotHideEachOther(t *testing.T) {
 
 func TestVisible_ExcludesOutOfRangeOutOfConeAndSelf(t *testing.T) {
 	cases := map[string]struct {
-		x, y float64
+		x, y float32
 		want []uid.UID64
 	}{
 		"in cone and in range":               {700, 500, []uid.UID64{near}},
@@ -195,8 +195,8 @@ func TestVisible_ReportsNearestFirst(t *testing.T) {
 	s.put(near, 300, 60, 10, 10)
 	s.put(far, 500, 140, 10, 10)
 
-	var order []float64
-	scan(t, s, eye, eastward(math.Pi/3, 900)).Entities(func(_ uid.UID64, d float64) {
+	var order []float32
+	scan(t, s, eye, eastward(math.Pi/3, 900)).Entities(func(_ uid.UID64, d float32) {
 		order = append(order, d)
 	})
 	if len(order) != 2 {
@@ -268,7 +268,7 @@ func TestVisible_WideConeStillExcludesWhatIsBehind(t *testing.T) {
 	s.put(tail, 700, 995, 20, 20)
 
 	var got []uid.UID64
-	scan(t, s, eye, eastward(2*math.Pi/3, 600)).Entities(func(id uid.UID64, _ float64) {
+	scan(t, s, eye, eastward(2*math.Pi/3, 600)).Entities(func(id uid.UID64, _ float32) {
 		got = append(got, id)
 	})
 

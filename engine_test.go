@@ -75,7 +75,7 @@ func newSceneIn(space *aabbworld.Space, iterations int) *scene {
 	return s
 }
 
-func (s *scene) put(id uid.UID64, x, y float64) *plane.AABB {
+func (s *scene) put(id uid.UID64, x, y float32) *plane.AABB {
 	s.items = append(s.items, aabbworld.Item{ID: id, Box: plane.NewAABB(geom.NewVec(x, y), 10, 10), Caps: aabbworld.CanCollide})
 	return &s.items[len(s.items)-1].Box
 }

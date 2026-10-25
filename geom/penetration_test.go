@@ -2,7 +2,7 @@ package geom
 
 import "testing"
 
-func boxAt(x, y, w, h float64) AABB { return NewAABB(NewVec(x, y), NewVec(x+w, y+h)) }
+func boxAt(x, y, w, h float32) AABB { return NewAABB(NewVec(x, y), NewVec(x+w, y+h)) }
 
 func TestPenetration(t *testing.T) {
 	cases := map[string]struct {

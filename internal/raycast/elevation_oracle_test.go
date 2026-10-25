@@ -14,11 +14,11 @@ import (
 // point, outside every nearer blocking box, and within the budget through the see-through ones.
 type elevatedOracle struct {
 	boxes  map[uid.UID64][4]float64
-	taus   map[uid.UID64]float64
+	taus   map[uid.UID64]float32
 	bands  map[uid.UID64]band
-	ground func(geom.Vec) float64
-	eye    float64
-	step   float64
+	ground func(geom.Vec) float32
+	eye    float32
+	step   float32
 	// profile, when set, gives the ground points of a ray in place of a sample every step
 	profile raycast.ProfileField
 }
@@ -27,7 +27,7 @@ type oracleHit struct {
 	id        uid.UID64
 	near, far float64
 	tau       float64
-	band      band
+	band      [2]float64
 	standing  bool
 }
 
@@ -52,7 +52,8 @@ type groundSeen struct {
 // castAll is cast with every ground point the ray judges, in no particular order.
 func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach float64, seen map[uid.UID64]bool, ground []groundSeen) {
 	dx, dy := math.Cos(angle), math.Sin(angle)
-	at := func(d float64) geom.Vec { return geom.NewVec(origin.X+dx*d, origin.Y+dy*d) }
+	ox, oy, eyeAt, step := float64(origin.X), float64(origin.Y), float64(o.eye), float64(o.step)
+	at := func(d float64) geom.Vec { return geom.NewVec(float32(ox+dx*d), float32(oy+dy*d)) }
 
 	var hits []oracleHit
 	for id, b := range o.boxes {
@@ -60,20 +61,21 @@ func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach f
 		if !ok {
 			continue
 		}
-		foot := o.ground(geom.NewVec((b[0]+b[2])/2, (b[1]+b[3])/2))
-		hits = append(hits, oracleHit{id, near, far, math.Min(o.taus[id], 1), o.bands[id], o.bands[id][0] <= foot+1e-6})
+		foot := float64(o.ground(geom.NewVec(float32((b[0]+b[2])/2), float32((b[1]+b[3])/2))))
+		bb := [2]float64{float64(o.bands[id][0]), float64(o.bands[id][1])}
+		hits = append(hits, oracleHit{id, near, far, math.Min(float64(o.taus[id]), 1), bb, bb[0] <= foot+1e-6*math.Max(1, math.Abs(foot))})
 	}
 	sort.Slice(hits, func(i, j int) bool { return hits[i].near < hits[j].near })
 
 	var points, faces []groundPoint
 	if o.profile != nil {
-		o.profile.Along(origin, geom.NewVec(dx, dy), radius, func(d, alt float64) bool {
-			points = append(points, groundPoint{d, alt, 0})
+		o.profile.Along(origin, geom.NewVec(float32(dx), float32(dy)), float32(radius), func(d, alt float32) bool {
+			points = append(points, groundPoint{float64(d), float64(alt), 0})
 			return true
 		})
 		// the ground where the ray meets each box, straight between the profile's points: it hides,
 		// up to the box, what lies behind it
-		prof := append([]groundPoint{{0, o.ground(origin), 0}}, points...)
+		prof := append([]groundPoint{{0, float64(o.ground(origin)), 0}}, points...)
 		for _, h := range hits {
 			for k := 1; k < len(prof); k++ {
 				if a, b := prof[k-1], prof[k]; h.near > a.dist && h.near < b.dist {
@@ -83,10 +85,10 @@ func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach f
 			}
 		}
 	} else {
-		for d := o.step; d < radius; d += o.step {
-			points = append(points, groundPoint{d, o.ground(at(d)), 0})
+		for d := step; d < radius; d += step {
+			points = append(points, groundPoint{d, float64(o.ground(at(d))), 0})
 		}
-		points = append(points, groundPoint{radius, o.ground(at(radius)), 0})
+		points = append(points, groundPoint{radius, float64(o.ground(at(radius))), 0})
 	}
 	for _, h := range hits {
 		if h.standing && h.near > 0 && h.near <= radius {
@@ -96,19 +98,19 @@ func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach f
 
 	height := func(tan, d float64) float64 {
 		if d == 0 {
-			return o.eye
+			return eyeAt
 		}
-		return o.eye + tan*d
+		return eyeAt + tan*d
 	}
 	// aboveGround: no nearer ground point pokes above the line.
 	aboveGround := func(tan, upto float64) bool {
 		for _, p := range points {
-			if p.dist < upto && (p.alt-o.eye)/p.dist > tan {
+			if p.dist < upto && (p.alt-eyeAt)/p.dist > tan {
 				return false
 			}
 		}
 		for _, f := range faces {
-			if f.dist <= upto && (f.alt-o.eye)/f.dist > tan {
+			if f.dist <= upto && (f.alt-eyeAt)/f.dist > tan {
 				return false
 			}
 		}
@@ -147,12 +149,12 @@ func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach f
 				}
 				lo, hi = from, to
 			case tan == 0:
-				if o.eye < h.band[0] || o.eye > h.band[1] {
+				if eyeAt < h.band[0] || eyeAt > h.band[1] {
 					continue
 				}
 				lo, hi = from, to
 			default:
-				d1, d2 := (h.band[0]-o.eye)/tan, (h.band[1]-o.eye)/tan
+				d1, d2 := (h.band[0]-eyeAt)/tan, (h.band[1]-eyeAt)/tan
 				lo, hi = math.Max(from, math.Min(d1, d2)), math.Min(to, math.Max(d1, d2))
 			}
 			if lo < hi {
@@ -187,13 +189,13 @@ func (o elevatedOracle) castAll(origin geom.Vec, angle, radius float64) (reach f
 			seen[h.id] = true
 			continue
 		}
-		tan := (h.band[1] - o.eye) / h.near
+		tan := (h.band[1] - eyeAt) / h.near
 		if aboveGround(tan, h.near) && clearOfWalls(tan, h.near, h.id) && budgetEnd(tan, h.near, h.id) >= h.near {
 			seen[h.id] = true
 		}
 	}
 	for _, p := range points {
-		tan := (p.alt - o.eye) / p.dist
+		tan := (p.alt - eyeAt) / p.dist
 		if !aboveGround(tan, p.dist) || !clearOfWalls(tan, p.dist, p.self) {
 			ground = append(ground, groundSeen{p.dist, false})
 			continue

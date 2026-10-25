@@ -49,7 +49,7 @@ func slantedScene(t *testing.T, field *slanted) (*scene, *fieldHooks) {
 }
 
 // rest is where a 10 by 10 box put at x, y comes to rest after a tick over field.
-func rest(t *testing.T, field *slanted, x, y float64) geom.Vec {
+func rest(t *testing.T, field *slanted, x, y float32) geom.Vec {
 	t.Helper()
 	s, _ := slantedScene(t, field)
 	box := s.put(1, x, y)
@@ -57,7 +57,7 @@ func rest(t *testing.T, field *slanted, x, y float64) geom.Vec {
 	return box.TopLeft
 }
 
-func near(a, b geom.Vec) bool { return math.Hypot(a.X-b.X, a.Y-b.Y) < 1e-9 }
+func near(a, b geom.Vec) bool { return math.Hypot(float64(a.X-b.X), float64(a.Y-b.Y)) < 1e-9 }
 
 // A wall along an axis pushes a box out as the box of the same rectangle does, open along its
 // long sides and at its free ends.
@@ -74,8 +74,8 @@ func TestWall_AlongAnAxisPushesAsTheBoxItCovers(t *testing.T) {
 		}
 		box := collide.FieldBox{Box: geom.NewAABB(geom.NewVec(100, 297), geom.NewVec(200, 303)),
 			Cell: 7, Open: sides}
-		for x := 85.37; x <= 205; x += 7 { // off whole numbers: no box lies as deep in two ways
-			for y := 286.21; y <= 304; y += 3 {
+		for x := float32(85.37); x <= 205; x += 7 { // off whole numbers: no box lies as deep in two ways
+			for y := float32(286.21); y <= 304; y += 3 {
 				got := rest(t, &slanted{walls: []collide.FieldWall{wall}}, x, y)
 				want := rest(t, &slanted{boxes: []collide.FieldBox{box}}, x, y)
 				if !near(got, want) {
@@ -94,7 +94,7 @@ func TestWall_SlantedPushesSquareToItself(t *testing.T) {
 	box := s.put(1, 196, 186) // its middle at (201, 191), 7 off the wall's line
 	s.tick(nil, nil)
 	moved := box.TopLeft.Sub(geom.NewVec(196, 186))
-	if math.Abs(moved.X+moved.Y) > 1e-9 || moved.X <= 0 {
+	if math.Abs(float64(moved.X+moved.Y)) > 1e-9 || moved.X <= 0 {
 		t.Errorf("moved by %v, want square to the wall, up and to the right", moved)
 	}
 	if push, ok := apart(*box, wall); !ok {
@@ -105,11 +105,12 @@ func TestWall_SlantedPushesSquareToItself(t *testing.T) {
 // apart reports whether box a and wall w no longer overlap, by the distance from the box's corners
 // to the wall's line against the box's reach across it.
 func apart(a plane.AABB, w collide.FieldWall) (float64, bool) {
-	d := w.B.Sub(w.A)
-	l := math.Hypot(d.X, d.Y)
-	nx, ny := -d.Y/l, d.X/l
-	cx, cy := a.TopLeft.X+a.Size.X/2-w.A.X, a.TopLeft.Y+a.Size.Y/2-w.A.Y
-	reach := a.Size.X/2*math.Abs(nx) + a.Size.Y/2*math.Abs(ny) + w.Half
+	dx, dy := float64(w.B.X-w.A.X), float64(w.B.Y-w.A.Y)
+	l := math.Hypot(dx, dy)
+	nx, ny := -dy/l, dx/l
+	cx := float64(a.TopLeft.X) + float64(a.Size.X)/2 - float64(w.A.X)
+	cy := float64(a.TopLeft.Y) + float64(a.Size.Y)/2 - float64(w.A.Y)
+	reach := float64(a.Size.X)/2*math.Abs(nx) + float64(a.Size.Y)/2*math.Abs(ny) + float64(w.Half)
 	over := reach - math.Abs(cx*nx+cy*ny)
 	return over, over <= 1e-9
 }
@@ -119,8 +120,8 @@ func TestWall_PiecesJoinedEndToEndPushAsOne(t *testing.T) {
 	one := collide.FieldWall{A: geom.NewVec(100, 100), B: geom.NewVec(400, 400), Half: 1, Cell: 1}
 	var pieces []collide.FieldWall
 	for k := range 10 {
-		a := geom.NewVec(100+30*float64(k), 100+30*float64(k))
-		b := geom.NewVec(130+30*float64(k), 130+30*float64(k))
+		a := geom.NewVec(100+30*float32(k), 100+30*float32(k))
+		b := geom.NewVec(130+30*float32(k), 130+30*float32(k))
 		open := collide.Ends(0)
 		if k == 0 {
 			open |= collide.EndA
@@ -183,13 +184,13 @@ func TestWall_ASensorIsToldButNeverPushedAndACellMayBeVetoed(t *testing.T) {
 func TestWall_TickDoesNotAllocateOnceWarm(t *testing.T) {
 	field := &slanted{}
 	for k := range 10 {
-		a := geom.NewVec(100+30*float64(k), 100+30*float64(k))
+		a := geom.NewVec(100+30*float32(k), 100+30*float32(k))
 		field.walls = append(field.walls, collide.FieldWall{A: a, B: a.Add(geom.NewVec(30, 30)),
 			Half: 1, Cell: uint64(k)})
 	}
 	s, _ := slantedScene(t, field)
 	for i := range 20 {
-		s.put(uid.UID64(i+1), 100+float64(i)*14, 100+float64(i)*14-12)
+		s.put(uid.UID64(i+1), 100+float32(i)*14, 100+float32(i)*14-12)
 	}
 	s.hooks.moved = nil
 	s.space.Rebuild(s.items)

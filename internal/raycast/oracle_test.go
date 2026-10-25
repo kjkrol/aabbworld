@@ -11,7 +11,7 @@ import (
 // slabHit is the textbook ray-box test the oracles use: where a unit ray enters and leaves b.
 func slabHit(b [4]float64, origin geom.Vec, dx, dy float64) (near, far float64, ok bool) {
 	near, far = math.Inf(-1), math.Inf(1)
-	for axis, ray := range [2][2]float64{{origin.X, dx}, {origin.Y, dy}} {
+	for axis, ray := range [2][2]float64{{float64(origin.X), dx}, {float64(origin.Y), dy}} {
 		o, d := ray[0], ray[1]
 		lo, hi := b[axis], b[axis+2]
 		if d == 0 {
@@ -34,13 +34,13 @@ func slabHit(b [4]float64, origin geom.Vec, dx, dy float64) (near, far float64, 
 
 // castRay is the sight model spelled out plainly over a map of boxes; taus nil makes every box
 // block.
-func castRay(boxes map[uid.UID64][4]float64, taus map[uid.UID64]float64, origin geom.Vec, angle, radius float64) (dist float64, id uid.UID64, hit bool) {
+func castRay(boxes map[uid.UID64][4]float64, taus map[uid.UID64]float32, origin geom.Vec, angle, radius float64) (dist float64, id uid.UID64, hit bool) {
 	dist, id, hit, _ = castRaySeeing(boxes, taus, origin, angle, radius)
 	return dist, id, hit
 }
 
 // castRaySeeing is castRay that also lists the see-through boxes the ray enters within its reach.
-func castRaySeeing(boxes map[uid.UID64][4]float64, taus map[uid.UID64]float64, origin geom.Vec, angle, radius float64) (dist float64, id uid.UID64, hit bool, through []uid.UID64) {
+func castRaySeeing(boxes map[uid.UID64][4]float64, taus map[uid.UID64]float32, origin geom.Vec, angle, radius float64) (dist float64, id uid.UID64, hit bool, through []uid.UID64) {
 	dx, dy := math.Cos(angle), math.Sin(angle)
 	type span struct {
 		near, far, tau float64
@@ -53,7 +53,7 @@ func castRaySeeing(boxes map[uid.UID64][4]float64, taus map[uid.UID64]float64, o
 		if !ok {
 			continue
 		}
-		if tau := math.Min(taus[bid], 1); tau > 0 {
+		if tau := math.Min(float64(taus[bid]), 1); tau > 0 {
 			seeThrough = append(seeThrough, span{near, far, tau, bid})
 			continue
 		}

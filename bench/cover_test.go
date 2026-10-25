@@ -20,11 +20,11 @@ const (
 // forestCover is a forest on a grid as a CoverField: a flat slice of cells walked cell by cell.
 type forestCover struct {
 	origin geom.Vec // the forest's top-left corner
-	tau    []float64
+	tau    []float32
 }
 
-func (f *forestCover) Walk(origin, dir geom.Vec, length float64, visit func(near, far, bottom, top, tau float64) bool) {
-	ox, oy := (origin.X-f.origin.X)/forestCell, (origin.Y-f.origin.Y)/forestCell
+func (f *forestCover) Walk(origin, dir geom.Vec, length float32, visit func(near, far, bottom, top, tau float32) bool) {
+	ox, oy := float64(origin.X-f.origin.X)/forestCell, float64(origin.Y-f.origin.Y)/forestCell
 	cx, cy := int(math.Floor(ox)), int(math.Floor(oy))
 	axis := func(o, d float64, c int) (int, float64, float64) {
 		switch {
@@ -35,12 +35,13 @@ func (f *forestCover) Walk(origin, dir geom.Vec, length float64, visit func(near
 		}
 		return 0, math.Inf(1), math.Inf(1)
 	}
-	sx, nx, dx := axis(ox, dir.X, cx)
-	sy, ny, dy := axis(oy, dir.Y, cy)
-	for t := 0.0; t < length; {
-		exit := math.Min(math.Min(nx, ny), length)
+	sx, nx, dx := axis(ox, float64(dir.X), cx)
+	sy, ny, dy := axis(oy, float64(dir.Y), cy)
+	inf := float32(math.Inf(1))
+	for t := 0.0; t < float64(length); {
+		exit := math.Min(math.Min(nx, ny), float64(length))
 		if cx >= 0 && cy >= 0 && cx < forestSide && cy < forestSide {
-			if tau := f.tau[cy*forestSide+cx]; tau > 0 && !visit(t, exit, math.Inf(-1), math.Inf(1), tau) {
+			if tau := f.tau[cy*forestSide+cx]; tau > 0 && !visit(float32(t), float32(exit), -inf, inf, tau) {
 				return
 			}
 		}
@@ -66,7 +67,7 @@ func forestScene(b *testing.B, share float64) (cover *forestCover, perCell, merg
 	}
 	observer = uid.UID64(1)
 	eye := aabbworld.Item{ID: observer, Box: plane.NewAABB(geom.NewVec(2000, 1995), 10, 10)}
-	cover = &forestCover{origin: geom.NewVec(2020, 2000-forestSide/2*forestCell), tau: make([]float64, forestSide*forestSide)}
+	cover = &forestCover{origin: geom.NewVec(2020, 2000-forestSide/2*forestCell), tau: make([]float32, forestSide*forestSide)}
 	cells := []aabbworld.Item{eye}
 	r := rand.New(rand.NewPCG(5, 7))
 	for i := range cover.tau {
@@ -74,7 +75,7 @@ func forestScene(b *testing.B, share float64) (cover *forestCover, perCell, merg
 			continue
 		}
 		cover.tau[i] = 0.5
-		x, y := cover.origin.X+float64(i%forestSide)*forestCell, cover.origin.Y+float64(i/forestSide)*forestCell
+		x, y := cover.origin.X+float32(i%forestSide)*forestCell, cover.origin.Y+float32(i/forestSide)*forestCell
 		cells = append(cells, aabbworld.Item{ID: uid.UID64(100 + i), Box: plane.NewAABB(geom.NewVec(x, y), forestCell, forestCell)})
 	}
 	perCell = newSpace()
@@ -90,7 +91,7 @@ func forestScene(b *testing.B, share float64) (cover *forestCover, perCell, merg
 // ten — through the forest as cover, as one entity per cell and, whole, as one merged entity.
 func Benchmark_View_Cover(b *testing.B) {
 	cone := aabbworld.Cone{Direction: geom.NewVec(1, 0), HalfAngle: math.Pi / 4, Radius: 220}
-	see := func(id uid.UID64) float64 { return 0.5 }
+	see := func(id uid.UID64) float32 { return 0.5 }
 	for _, layout := range []struct {
 		name  string
 		share float64
@@ -102,7 +103,7 @@ func Benchmark_View_Cover(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				if space.Scan(observer, c, v) {
-					v.Entities(func(uid.UID64, float64) {})
+					v.Entities(func(uid.UID64, float32) {})
 					fan = v.Outline(0, fan[:0])
 				}
 			}

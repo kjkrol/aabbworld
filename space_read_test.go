@@ -20,7 +20,7 @@ func readSpace(r *SpaceRead, items []Item) []int {
 			func(uid.UID64) {}))
 		seen := -1
 		if r.Scan(it.ID, cone, &view) {
-			seen = view.Entities(func(uid.UID64, float64) {})
+			seen = view.Entities(func(uid.UID64, float32) {})
 		}
 		out = append(out, seen)
 	}
@@ -34,7 +34,7 @@ func TestSpaceRead_ManyGoroutinesReadAtOnceAsOneDoes(t *testing.T) {
 	}
 	var items []Item
 	for i := range 400 {
-		x, y := float64(37*i%1990), float64(53*i%1990)
+		x, y := float32(37*i%1990), float32(53*i%1990)
 		items = append(items, Item{ID: uid.UID64(i + 1),
 			Box: plane.NewAABB(geom.NewVec(x, y), 8, 8)})
 	}

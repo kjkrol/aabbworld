@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.17.0 — 2026-10-25
+
+**Numbers**
+- Breaking: every number of the geometry is a float32. `geom.Vec{X, Y}` is float32, and with it
+  the corners of `geom.AABB` and the corners, `Size` and `Overhang` of `plane.AABB`; so are
+  `geom.NewVec`, `geom.NewAABBAt`, `plane.NewAABB`, `AABB.AxisDistanceX/Y`,
+  `collide.Config.Reach`, `collide.FieldWall.Half`, every field of `Cone` (`HalfAngle`, `Radius`,
+  `Eye`, `GroundStep`, and what `Transparency`, `Elevation` and `Ground` return), the distance
+  `View.Entities` hands out, the step of `View.Outline`, and `CoverField.Walk` and
+  `ProfileField.Along`. A `plane.AABB` is 32 bytes instead of 64, so a record of gram's (a box, a
+  velocity of four float64, a kind and a capability) is 72 bytes instead of 104. Whole units are
+  exact up to 2^24; the step between two values is about 0.001 at 10,000.
+- A coordinate a hair below zero folds to 0 on a wrapping axis, not onto the far edge, where
+  float32 would round it (-1e-7 + 4 is 4).
+- Sight works its rays out in float64 and answers in float32. The eye and each ray's direction are
+  rounded to float32 first, so the boxes, the cover and the profile are met along the very ray
+  `Walk` and `Along` are handed; a ray along cell corners no longer sees a wall's sliver in the
+  boxes that the cover walk misses.
+- An entity stands on the ground when its bottom lies within a millionth of the ground's height
+  (and at least 1e-6) above it, no longer within 1e-6 alone, which float32 heights above 32 cannot
+  resolve.
+
+**Index**
+- Built with `GOEXPERIMENT=simd` on a CPU with AVX2, the pair sweep tests a crowded cell eight
+  boxes at a time instead of four, still from eight entries, and finds the same pairs in the same
+  order as the plain sweep. Against v1.16.0, the `BroadPhase` crowd in 256-unit buckets ticks in
+  2.32 ms instead of 2.99, the mixed-size `Grid_RebuildPairsQuery` in 4.61 ms instead of 5.24, the
+  crowd of 10×10 boxes covering 40% in 4.09 ms instead of 4.60.
+- Without the experiment the sweep's entries are 32 bytes, padded from 24 so the scalar pair test
+  loads them as it loaded float64 ones; the scenes of small buckets tick as fast or up to 5.5%
+  faster, the 256-unit crowd 5% slower.
+- In both builds the dense solver is 21% faster (3.54 → 2.78 ms), a crowded column's tick 15.5%
+  (3.81 → 3.22 ms), `Column_Move` over runs 5–6%, `Surface.WrapAABB` 55%.
+- Scenes of fixed boxes find the same pairs as with float64; random positions rounded to float32
+  can make a pair more or fewer (53,867 instead of 53,866 among 33,554 boxes), and a crowd moved
+  for a hundred ticks drifts (2,648 contacts a tick instead of 2,659).
+- Sight is 3–9.5% slower, most where it samples the ground: every point handed to `Cone.Ground`
+  and every height it returns is converted. See [BENCHMARKS.md](BENCHMARKS.md#float32--v1170).
+
 ## v1.16.0 — 2026-10-24
 
 **Index**
