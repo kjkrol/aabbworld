@@ -16,14 +16,24 @@ type ProfileField interface {
 }
 
 // elevation is what a cast needs beyond the plane when the cone has heights: the eye, the ground
-// and how far apart the ground is sampled along a ray, or its profile.
+// and how far apart the ground is sampled along a ray, or its profile, or a field of heights.
 type elevation struct {
 	eye     float64
 	ground  func(geom.Vec) float32 // nil: flat at 0
 	profile ProfileField           // nil: the ground sampled every step
+	lat     lattice                // with a field, the ground and the profile both
 	step    float64
 	w, h    float64 // wrap sizes, 0 where the axis does not wrap
 }
+
+// over has the ground read off f, sunk by bend, in place of a ground and a profile.
+func (e *elevation) over(f *HeightField, bend float32) {
+	e.lat.set(f, bend)
+	e.ground, e.profile = nil, &e.lat
+}
+
+// grounded reports whether the ground can be read at any point, not only along a ray.
+func (e *elevation) grounded() bool { return e.ground != nil || e.lat.f != nil }
 
 // profileWalk is one cast's ground along its ray, as the profile hands it over.
 type profileWalk struct {
@@ -37,24 +47,44 @@ func (w *profileWalk) take(d, alt float64) bool {
 	if d <= 0 {
 		return true
 	}
-	d = min(d, w.length)
+	if d > w.length {
+		d = w.length
+	}
 	w.d, w.alt = append(w.d, d), append(w.alt, alt)
 	return d < w.length
 }
 
-// walkProfile gathers the ground along one ray into sc.profile, ending at length: from the ground
-// there, or the profile's last height, where the profile stops short of it.
+// profileAt is the ground along the ray of angle at, as the walk laid it, or walked now.
+func (sc *scratch) profileAt(e *elevation, at int, origin, dir vec, length float64) *profileWalk {
+	if w := sc.block.of(at); w != nil {
+		return w
+	}
+	sc.walkProfile(e, origin, dir, length)
+	return &sc.profile
+}
+
+// walkProfile gathers the ground along one ray into sc.profile, ending at length.
 func (sc *scratch) walkProfile(e *elevation, origin, dir vec, length float64) {
 	w := &sc.profile
 	w.d, w.alt, w.length = w.d[:0], w.alt[:0], length
-	if w.visit == nil {
-		w.visit = func(d, alt float32) bool { return w.take(float64(d), float64(alt)) }
+	if e.lat.f != nil {
+		e.lat.walk(w, origin, dir)
+	} else {
+		if w.visit == nil {
+			w.visit = func(d, alt float32) bool { return w.take(float64(d), float64(alt)) }
+		}
+		e.profile.Along(origin.vec32(), dir.vec32(), float32(length), w.visit)
 	}
-	e.profile.Along(origin.vec32(), dir.vec32(), float32(length), w.visit)
+	e.close(w, origin, dir, length)
+}
+
+// close ends a profile at length: at the ground there, or the profile's last height, where the
+// profile stops short of it.
+func (e *elevation) close(w *profileWalk, origin, dir vec, length float64) {
 	if n := len(w.d); n == 0 || w.d[n-1] < length {
 		alt := 0.0
 		switch {
-		case e.ground != nil:
+		case e.grounded():
 			alt = e.at(origin, dir, length)
 		case n > 0:
 			alt = w.alt[n-1]
@@ -65,7 +95,7 @@ func (sc *scratch) walkProfile(e *elevation, origin, dir vec, length float64) {
 
 // at is the ground height under the point dist along the ray, folded back onto a wrapping world.
 func (e *elevation) at(origin, dir vec, dist float64) float64 {
-	if e.ground == nil {
+	if !e.grounded() {
 		return 0
 	}
 	x, y := origin.x+dir.x*dist, origin.y+dir.y*dist
@@ -75,6 +105,9 @@ func (e *elevation) at(origin, dir vec, dist float64) float64 {
 	}
 	if e.h > 0 {
 		p.Y = fold(y, e.h)
+	}
+	if e.lat.f != nil {
+		return float64(e.lat.sunk(e.lat.at(p), float32(dist)))
 	}
 	return float64(e.ground(p))
 }
@@ -111,14 +144,31 @@ type ray struct {
 
 // castElevated follows one angle with heights: an entry is seen when the sightline to its top
 // clears the ground and every nearer blocking box within the budget; the reach is the farthest
-// lit ground, a standing box's foot included.
-func castElevated(origin vec, coneDir, rel, radius float64, cands []candidate, active []int, e *elevation, sc *scratch, mark bool) sample {
-	abs := coneDir + rel
-	dir := vec{math.Cos(abs), math.Sin(abs)}.round32()
+// lit ground, a standing box's foot included. at is the angle's index among the walk's angles,
+// below 0 for one between them.
+func castElevated(
+	origin vec,
+	coneDir, rel float64,
+	at int,
+	radius float64,
+	cands []candidate,
+	active []int,
+	e *elevation,
+	sc *scratch,
+	mark bool,
+) sample {
+	dir := sc.slabs.rayAt(at, coneDir+rel)
 
 	cross := sc.crossings[:0]
+	fromSlabs := laid(at)
 	for _, i := range active {
-		near, far, ok := hitDistance(origin, dir, cands[i].box)
+		var near, far float64
+		var ok bool
+		if fromSlabs {
+			near, far, ok = sc.slabs.slabAt(at, i)
+		} else {
+			near, far, ok = hitDistance(origin, dir, cands[i].box)
+		}
 		if !ok {
 			continue
 		}
@@ -144,13 +194,13 @@ func castElevated(origin vec, coneDir, rel, radius float64, cands []candidate, a
 	}
 	j := 0
 	if e.profile != nil {
-		sc.walkProfile(e, origin, dir, radius)
-		prevD, prevAlt := 0.0, sc.profile.alt[0]
-		if e.ground != nil {
+		p := sc.profileAt(e, at, origin, dir, radius)
+		prevD, prevAlt := 0.0, p.alt[0]
+		if e.grounded() {
 			prevAlt = e.at(origin, dir, 0)
 		}
-		for k, d := range sc.profile.d {
-			alt := sc.profile.alt[k]
+		for k, d := range p.d {
+			alt := p.alt[k]
 			for j < len(cross) && cross[j].near <= d {
 				// the ground where the ray meets the box, straight between the points either side,
 				// hides what the points alone would not: a box on a slope rising to its face

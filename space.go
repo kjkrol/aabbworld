@@ -138,6 +138,13 @@ func (r *SpaceRead) Query(box geom.AABB, want Capability, fn func(id uid.UID64))
 	return r.s.Query(box, want, fn)
 }
 
+// QueryCone is the Space's QueryCone.
+func (r *SpaceRead) QueryCone(
+	origin, dir geom.Vec, halfAngle, radius float32, want Capability, fn func(id uid.UID64),
+) int {
+	return r.s.QueryCone(origin, dir, halfAngle, radius, want, fn)
+}
+
 // Scan is the Space's Scan.
 func (r *SpaceRead) Scan(observer uid.UID64, cone Cone, v *View) bool {
 	return r.s.Scan(observer, cone, v)
@@ -226,6 +233,42 @@ func (s *Space) Query(box geom.AABB, want Capability, fn func(id uid.UID64)) int
 		found += s.grid.Query(image, caps, fn)
 		return true
 	})
+	return found
+}
+
+// QueryCone calls fn for every indexed piece that may reach into the cone — within radius of
+// origin and, for a cone narrower than a half-turn, not wholly beyond either of its edges — sharing
+// want, seams included, and returns how many; a piece straddling a seam may be reported more than
+// once, one just outside may be reported, one inside is never missed.
+func (s *Space) QueryCone(
+	origin, dir geom.Vec, halfAngle, radius float32, want Capability, fn func(id uid.UID64),
+) int {
+	w, h := float32(s.Width), float32(s.Height)
+	worlds := [3]float32{0, -1, 1}
+	nx, ny := 1, 1
+	if s.Edges.WrapsX() {
+		nx = 3
+	}
+	if s.Edges.WrapsY() {
+		ny = 3
+	}
+	found := 0
+	for _, kx := range worlds[:nx] {
+		x := origin.X + kx*w
+		x1, x2 := max(x-radius, 0), min(x+radius, w)
+		if x1 > x2 {
+			continue
+		}
+		for _, ky := range worlds[:ny] {
+			y := origin.Y + ky*h
+			y1, y2 := max(y-radius, 0), min(y+radius, h)
+			if y1 > y2 {
+				continue
+			}
+			found += s.grid.QueryCone(geom.NewAABB(geom.NewVec(x1, y1), geom.NewVec(x2, y2)),
+				geom.NewVec(x, y), dir, halfAngle, radius, spatial.Capability(want), fn)
+		}
+	}
 	return found
 }
 

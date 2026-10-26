@@ -87,11 +87,13 @@
 // when everything blocks. Every entity sight reaches is seen, a forest looked into as much as a
 // wall looked at.
 //
-// Sight has heights once Cone.Elevation, Cone.Ground or Cone.Profile is set: the eye is Cone.Eye
-// up, an entity spans its bottom to its top, the ground lies at Cone.Ground of a point and is
-// sampled every Cone.GroundStep along a ray — or, for a ground of flat facets, Cone.Profile hands
-// each ray the points where its slope changes, a few a cell in place of a sample every step, and
-// what the ground hides is then exact. An entity is seen when the straight line from the eye to its top
+// Sight has heights once Cone.Elevation, Cone.Ground, Cone.Profile or Cone.Heights is set: the eye
+// is Cone.Eye up, an entity spans its bottom to its top, the ground lies at Cone.Ground of a point
+// and is sampled every Cone.GroundStep along a ray — or, for a ground of flat facets, Cone.Profile
+// hands each ray the points where its slope changes, a few a cell in place of a sample every step,
+// and what the ground hides is then exact; Cone.Heights is such a ground as data, a lattice of
+// corner heights the scan walks itself, every point sunk by Cone.Bend times the distance squared.
+// An entity is seen when the straight line from the eye to its top
 // clears the ground and every nearer blocking entity's band, within the budget — a see-through
 // entity charges only the stretch the line spends inside its band. The reach of an angle is the
 // farthest lit ground, so a hawk looks over a wall the walker beside it is stopped by, and a hill
@@ -121,8 +123,13 @@
 // sweep tests a crowded cell — eight entries or more — eight boxes at a time: one box against the
 // next eight, their edges loaded side by side, the cell's claim on each pair checked in the same
 // pass. It finds the same pairs, in the same order, as the plain sweep, which every other build and
-// CPU runs. Crowds in large buckets gain most, sparse cells nothing; see BENCHMARKS.md. [SIMD]
-// reports which sweep runs.
+// CPU runs. Crowds in large buckets gain most, sparse cells nothing; see BENCHMARKS.md. Sight,
+// built so, asks the grid for the boxes its cone may reach eight at a time, from columns of the
+// cells' edges built with the cells once a scan has been asked, and works out before each sweep
+// where its rays enter and leave the boxes in sight, four rays against a box at a time, and over a
+// Cone.Heights field walks the ground of four rays at a time, a ray to a lane, the corners of their
+// cells read lane by lane; it sees what the plain scan sees, to the bit. [SIMD] reports which
+// build runs.
 //
 // # Package dependencies
 //

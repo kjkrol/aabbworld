@@ -4,16 +4,16 @@
 //
 // # QueryableSpace
 //
-// [QueryableSpace] is the slice of a spatial index a scan needs: a range query, the box of one
-// entity by id, and the world's size and which axes wrap. The public Space satisfies it through an
+// [QueryableSpace] is the slice of a spatial index a scan needs: a query of the cone, the box of
+// one entity by id, and the world's size and which axes wrap. The public Space satisfies it through an
 // adapter; the tests use a fake.
 //
 // # Cone
 //
 // A [Cone] is a direction, a half-angle either side of it below π, a radius, how see-through each
 // entity is and, when sight has heights, the eye's height, each entity's bottom and top and the
-// ground's height at a point. The scan queries the index for the rectangles covering the cone,
-// split at each wrapping seam, and keeps only the candidates the cone's two edges do not dismiss.
+// ground's height at a point. The scan asks the index for the entities its cone may reach; a
+// wrapping world answers through the cone's copies a world away.
 // The cone's fields are float32, as the boxes are; the scan works the eye, its rays and the
 // distances along them out in float64, where the difference of two corners is exact, and answers
 // in float32. The eye and each ray's direction are rounded to float32 first, so the boxes, the
@@ -45,7 +45,9 @@
 //
 // # Elevation
 //
-// With Cone.Elevation or Cone.Ground set, sight has heights. The eye is at Cone.Eye; an entity
+// With Cone.Elevation, Cone.Ground, Cone.Profile or Cone.Heights set, sight has heights; a
+// [HeightField] is walked by the scan itself (heightfield.go), its points those a profile of the
+// same lattice would hand over, each sunk by Cone.Bend times the distance squared. The eye is at Cone.Eye; an entity
 // spans its bottom to its top (nil Elevation: every height); the ground lies at Cone.Ground of a
 // point (nil: flat at 0) and is sampled every Cone.GroundStep along a ray, plus once at the radius.
 // A target — the top of an entity's near face, or a ground sample — is in sight when the straight
@@ -86,7 +88,9 @@
 // # Files
 //
 // sweep.go is the angular sweep and the budgeted cast along one angle on a plane; cover.go the walk
-// over ground cover; elevation.go the cast with heights; shadow_bands.go the runs of hidden ground a cast is shown; shadow.go the arcs a box subtends and the wedge test that dismisses a box
-// outside the cone; slab.go the ray-box entry and exit distances; space.go the search rectangles,
-// the nearest wrapped image of a box and the distances on a torus.
+// over ground cover; elevation.go the cast with heights; heightfield.go the walk over a lattice of
+// corner heights (heightfield_simd.go four rays side by side); shadow_bands.go the runs of hidden
+// ground a cast is shown; shadow.go the arcs a box subtends; slab.go the ray-box entry and exit
+// distances, laid for a whole walk at once (slab_simd.go four rays at a time); space.go the nearest
+// wrapped image of a box and the distances on a torus.
 package raycast

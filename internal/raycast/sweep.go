@@ -101,6 +101,11 @@ func walk(
 	next := 0
 	// The marking sweep over cover refines where the reach jumps between two samples: a cover edge.
 	refine := mark && sc.field != nil
+	if wide {
+		sc.slabs.lay(origin, coneDir, minGap, angles, events, cands)
+	}
+	lockstep := wide && elev != nil && elev.lat.f != nil && elev.lat.cellsX > 0
+	sc.block.reset()
 
 	for i, a := range angles {
 		if i > 0 && a-angles[i-1] < minGap {
@@ -120,9 +125,12 @@ func walk(
 		}
 		var s sample
 		if elev != nil {
-			s = castElevated(origin, coneDir, a, radius, cands, active, elev, sc, mark)
+			if lockstep {
+				sc.block.lay(elev, origin, radius, minGap, angles, sc.slabs.dirs, i)
+			}
+			s = castElevated(origin, coneDir, a, i, radius, cands, active, elev, sc, mark)
 		} else {
-			s = castFlat(origin, coneDir, a, radius, cands, active, sc, mark)
+			s = castFlat(origin, coneDir, a, i, radius, cands, active, sc, mark)
 			if sc.shade.on {
 				sc.shade.emit(s.dist, radius) // on a plane nothing past the reach is seen
 			}
@@ -153,9 +161,10 @@ type caster struct {
 
 func (c *caster) cast(a float64) sample {
 	if c.elev != nil {
-		return castElevated(c.origin, c.coneDir, a, c.radius, c.cands, c.active, c.elev, c.sc, c.mark)
+		return castElevated(
+			c.origin, c.coneDir, a, -1, c.radius, c.cands, c.active, c.elev, c.sc, c.mark)
 	}
-	s := castFlat(c.origin, c.coneDir, a, c.radius, c.cands, c.active, c.sc, c.mark)
+	s := castFlat(c.origin, c.coneDir, a, -1, c.radius, c.cands, c.active, c.sc, c.mark)
 	if c.sc.shade.on {
 		c.sc.shade.emit(s.dist, c.radius) // on a plane nothing past the reach is seen
 	}
@@ -189,16 +198,32 @@ type crossing struct {
 
 // castFlat follows one angle on a plane: the nearest blocking candidate is the wall, see-through
 // ones eat the budget. The sample is a hit only when the wall is reached before the budget runs out.
-func castFlat(origin vec, coneDir, rel, radius float64, cands []candidate, active []int, sc *scratch, mark bool) sample {
-	abs := coneDir + rel
-	dir := vec{math.Cos(abs), math.Sin(abs)}.round32()
+// at is the angle's index among the walk's angles, below 0 for one between them.
+func castFlat(
+	origin vec,
+	coneDir, rel float64,
+	at int,
+	radius float64,
+	cands []candidate,
+	active []int,
+	sc *scratch,
+	mark bool,
+) sample {
+	dir := sc.slabs.rayAt(at, coneDir+rel)
 	cross := &sc.crossings
 
 	best, wall := sample{angle: rel, dist: radius}, noCut
 	crossed := 0
+	fromSlabs := laid(at)
 	for _, i := range active {
-		c := cands[i]
-		near, far, ok := hitDistance(origin, dir, c.box)
+		c := &cands[i]
+		var near, far float64
+		var ok bool
+		if fromSlabs {
+			near, far, ok = sc.slabs.slabAt(at, i)
+		} else {
+			near, far, ok = hitDistance(origin, dir, c.box)
+		}
 		if !ok {
 			continue
 		}

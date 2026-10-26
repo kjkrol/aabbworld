@@ -83,6 +83,10 @@ type Grid struct {
 	cells  []gridCell
 	sweep  pairSweep
 
+	cols       coneCols    // the cells' boxes as QueryCone loads them, eight at a time
+	coned      bool        // a cone was asked, so the cells are built with their columns
+	colsBehind atomic.Bool // the columns are behind the cells
+
 	listingID   uid.UID64
 	listingCaps Capability
 	onImage     plane.FragVisitor
@@ -236,6 +240,10 @@ func (g *Grid) index() {
 			}
 		}
 	}
+	if wide && g.coned {
+		g.cols.fill(g.cells)
+	}
+	g.colsBehind.Store(!wide || !g.coned)
 }
 
 func (g *Grid) addImage(_ plane.FragPosition, image geom.AABB) bool {
