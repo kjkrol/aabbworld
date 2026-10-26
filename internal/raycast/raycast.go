@@ -10,9 +10,25 @@ import (
 
 // QueryableSpace is the slice of a spatial index this package needs.
 type QueryableSpace interface {
-	Query(aabb geom.AABB, fn func(id uid.UID64)) int
+	// QueryCone calls fn for every entry that may reach into the cone — within radius of origin
+	// and, for a cone narrower than a half-turn, not wholly beyond either of its edges; an entry
+	// straddling a seam may be reported more than once, one outside may be reported, one inside is
+	// never missed.
+	QueryCone(origin, dir geom.Vec, halfAngle, radius float32, fn func(id uid.UID64)) int
 	EntryAABB(id uid.UID64) (geom.AABB, bool)
 	Bounds() (width, height uint32, wrapX, wrapY bool)
+}
+
+// HeightField is the ground as a lattice of corner heights over square cells: Cols by Rows
+// corners, Cell apart, row by row from the world's origin (the corner (x, y) at
+// Corners[y*Cols+x]). A cell is two flat triangles folded along the diagonal whose two corners
+// differ less in height; off the lattice the ground is 0; on an axis that wraps the corner past
+// the last is the first again.
+type HeightField struct {
+	Corners      []float32
+	Cols, Rows   int
+	Cell         float32
+	WrapX, WrapY bool
 }
 
 // Cone bounds a visibility query: a direction, a half-angle either side of it, how far it reaches,
@@ -29,6 +45,8 @@ type Cone struct {
 	GroundStep   float32
 	Profile      ProfileField
 	Cover        CoverField
+	Heights      *HeightField
+	Bend         float32
 }
 
 // View is one observer's line of sight: scanned once, then read as many ways as needed.
@@ -38,7 +56,6 @@ type View struct {
 
 	col     collector
 	colFn   func(uid.UID64)
-	areas   []geom.AABB
 	found   []seen
 	uniform []float64
 	depths  []sample
@@ -80,7 +97,8 @@ func (v *View) Scan(space QueryableSpace, observer uid.UID64, cone Cone) bool {
 	v.coneDir = math.Atan2(float64(cone.Direction.Y), float64(cone.Direction.X))
 	v.halfAngle = float64(cone.HalfAngle)
 	v.radius = float64(cone.Radius)
-	v.elevated = cone.Elevation != nil || cone.Ground != nil || cone.Profile != nil
+	v.elevated = cone.Elevation != nil || cone.Ground != nil || cone.Profile != nil ||
+		cone.Heights != nil
 	var elev *elevation
 	if v.elevated {
 		step := float64(cone.GroundStep)
@@ -88,6 +106,9 @@ func (v *View) Scan(space QueryableSpace, observer uid.UID64, cone Cone) bool {
 			step = v.radius / 16
 		}
 		v.elev = elevation{eye: float64(cone.Eye), ground: cone.Ground, profile: cone.Profile, step: step, w: wrapSize(w, wrapX), h: wrapSize(h, wrapY)}
+		if cone.Heights != nil {
+			v.elev.over(cone.Heights, cone.Bend)
+		}
 		elev = &v.elev
 	}
 
@@ -227,6 +248,8 @@ type scratch struct {
 	field     CoverField // the ground cover the casts walk, nil for none
 	cover     coverWalk  // the current cast's stretches of cover
 	profile   profileWalk
+	block     profileBlock
+	slabs     slabs
 }
 
 func (s *scratch) reset() {
@@ -248,7 +271,6 @@ func (s *scratch) reset() {
 // the nearest distance a cast saw it from (+Inf until one does).
 type candidate struct {
 	id       uid.UID64
-	dist     float64
 	span     arc
 	box      rect
 	tau      float64
@@ -269,9 +291,7 @@ type collector struct {
 	origin   vec
 	cone     Cone
 	coneDir  float64
-	radius   float64
 	half     float64 // the cone's half-angle
-	edges    wedge
 	w, h     float64
 	wrapX    bool
 	wrapY    bool
@@ -293,10 +313,6 @@ func (c *collector) take(id uid.UID64) {
 	if c.wrapX || c.wrapY {
 		box = nearestImage(c.origin, box, wrapSize(c.w, c.wrapX), wrapSize(c.h, c.wrapY))
 	}
-	dist := boxDistance(c.eyeBox, box)
-	if dist > c.radius || c.edges.excludes(c.origin, box) {
-		return
-	}
 	tau := 0.0
 	if c.cone.Transparency != nil {
 		tau = min(float64(c.cone.Transparency(id)), 1)
@@ -308,12 +324,16 @@ func (c *collector) take(id uid.UID64) {
 	if span.empty() {
 		return
 	}
-	cand := candidate{id: id, dist: dist, span: span, box: rectOf(box), tau: tau, bottom: math.Inf(-1), top: math.Inf(1), standing: true, seenAt: math.Inf(1)}
+	cand := candidate{id: id, span: span, box: rectOf(box), tau: tau, bottom: math.Inf(-1), top: math.Inf(1), standing: true, seenAt: math.Inf(1)}
 	if c.cone.Elevation != nil {
 		bottom, top := c.cone.Elevation(id)
 		cand.bottom, cand.top = float64(bottom), float64(top)
 	}
-	if c.cone.Ground != nil {
+	switch {
+	case c.cone.Heights != nil:
+		cand.foot = footOn(c.cone.Heights, c.cone.Bend, raw, c.origin, wrapSize(c.w, c.wrapX),
+			wrapSize(c.h, c.wrapY))
+	case c.cone.Ground != nil:
 		cand.foot = float64(c.cone.Ground(centerOf(raw).vec32()))
 	}
 	// resting on the ground, not floating above it; the slack is a few float32 steps of the height
@@ -333,16 +353,13 @@ func (v *View) gather(
 ) []candidate {
 	v.col = collector{
 		space: space, observer: observer, eyeBox: eyeBox, origin: v.origin, cone: cone,
-		coneDir: v.coneDir, radius: v.radius, half: v.halfAngle, edges: newWedge(v.coneDir, v.halfAngle),
+		coneDir: v.coneDir, half: v.halfAngle,
 		w: w, h: h, wrapX: wrapX, wrapY: wrapY, sc: &v.scratch,
 	}
 	if v.colFn == nil {
 		v.colFn = v.col.take
 	}
 
-	v.areas = searchAreas(v.origin, v.radius, w, h, wrapX, wrapY, v.areas[:0])
-	for _, r := range v.areas {
-		space.Query(r, v.colFn)
-	}
+	space.QueryCone(v.origin.vec32(), cone.Direction, cone.HalfAngle, cone.Radius, v.colFn)
 	return v.cands
 }

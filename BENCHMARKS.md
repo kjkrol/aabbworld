@@ -202,6 +202,25 @@ entities (v1.6.0) costs the opaque-only scan nothing measurable — six alternat
 v1.5.0 tree differ by 1–3% with p > 0.3 on every row — and adds about 8% when three entities in ten
 are see-through: the extra samples across their spans and the budget walk behind them.
 
+**Sight in SIMD** (2026-10-26, v1.18.0 against `perf/sight-simd`, alternately on an idle machine,
+the lower of six runs). The scan asks the grid for the boxes its cone may reach (`Grid.QueryCone`:
+the radius, the wedge and the owner cell tested eight pieces at a time from columns of the cells'
+edges with `GOEXPERIMENT=simd`, one at a time otherwise), lays before each sweep where every ray
+enters and leaves each candidate's box, four rays at a time in float64, and over a `Cone.Heights`
+field walks the ground of four rays at a time, a ray to a lane. With 1,000 entities, SIMD build:
+`View_Visible` 25.4 → 15.7 µs, `View_Both` 29.1 → 19.3, `View_Depths` 30.0 → 18.8,
+`View_Translucent` 32.2 → 21.4, `View_Elevated` `none` 32.2 → 21.4, `entities` 92.7 → 77.3, `raster`
+99.2 → 86.8, `raster-step50` 80.6 → 68.1, `View_Shadows` over a raster 122 → 110, `View_Cover` with
+entities on 30% forest 46.1 → 32.1; with 100 entities 10–17% less. The plain build gains nearly as
+much from the tight cone query alone (`View_Visible` 1,000: 26.1 → 16.8 µs, 100: 3.0 → 2.3).
+`BroadPhase` ticks within 0.4% and `Grid_RebuildPairsQuery` within 1%. Eight rays in float32 against
+four in float64: within 1% on every row, so the float64 slabs stay (they see the same entities to
+the bit; float32 flipped ties on boxes with a face on a cell's line). New: `View_Tick` (a rebuild
+and eight scans a tick) and `View_Seam`; `View_Elevated` rungs `profile` and `field`, the same
+lattice through a profile's calls and as the cone's own `Heights`: 294 → 242 µs with the field
+walked ray by ray, 173 µs walked four rays at a time (the `profile` rung, the control, 294 either
+way; 100 entities 84 → 59 µs).
+
 ### Sight with heights — `Benchmark_View_Elevated`
 
 The `View_Translucent` scene and cone (90°, radius 800, three entities in ten see-through at τ = 0.5,

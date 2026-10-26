@@ -3,7 +3,6 @@ package aabbworld
 import (
 	"github.com/kjkrol/aabbworld/geom"
 	iraycast "github.com/kjkrol/aabbworld/internal/raycast"
-	"github.com/kjkrol/aabbworld/internal/spatial"
 	"github.com/kjkrol/uid"
 )
 
@@ -31,6 +30,12 @@ type Cone struct {
 	// Cover is the ground cover of a world on a grid — walls, forests — walked cell by cell along
 	// each ray instead of being entities in the Space; nil is none.
 	Cover CoverField
+	// Heights is the ground as a lattice of corner heights, read along each ray inside the scan in
+	// place of Ground and Profile, which it stands in for; nil is none.
+	Heights *HeightField
+	// Bend is how far the ground sinks below its height with the square of the distance from the
+	// eye (a world's curvature), applied to Heights alone; 0 is flat.
+	Bend float32
 }
 
 // CoverField is what stands on the cells of a grid and holds sight back, as a ray meets it: Walk
@@ -40,6 +45,13 @@ type Cone struct {
 // ≤ 0 blocks). visit returning false ends the walk. The owner of the grid walks it exactly (a DDA
 // over its cells), so what lies behind a wall on a plane is never read.
 type CoverField = iraycast.CoverField
+
+// HeightField is the ground as a lattice of corner heights over square cells: Cols by Rows
+// corners, Cell apart, row by row from the world's origin (the corner (x, y) at
+// Corners[y*Cols+x]). A cell is two flat triangles folded along the diagonal whose two corners
+// differ less in height; off the lattice the ground is 0; on an axis that wraps the corner past
+// the last is the first again.
+type HeightField = iraycast.HeightField
 
 // ProfileField is the ground along a ray, exactly: Along follows the ray from origin along the unit
 // dir for length and calls visit, nearest first, with every point where the ground's slope changes —
@@ -90,8 +102,8 @@ func (v *View) Outline(maxArcStep float32, dst []geom.Vec) []geom.Vec {
 // scan needs of the index does not have to be part of Space's public face.
 type sight struct{ s *Space }
 
-func (e sight) Query(box geom.AABB, fn func(id uid.UID64)) int {
-	return e.s.grid.Query(box, spatial.AnyCapability, fn)
+func (e sight) QueryCone(origin, dir geom.Vec, halfAngle, radius float32, fn func(uid.UID64)) int {
+	return e.s.QueryCone(origin, dir, halfAngle, radius, AnyCapability, fn)
 }
 func (e sight) EntryAABB(id uid.UID64) (geom.AABB, bool) { return e.s.grid.EntryAABB(id) }
 func (e sight) Bounds() (width, height uint32, wrapX, wrapY bool) {

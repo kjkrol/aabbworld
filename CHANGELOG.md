@@ -1,5 +1,48 @@
 # Changelog
 
+## v1.19.0 — 2026-10-26
+
+**Sight**
+- A scan asks the grid for its cone: `Grid.QueryCone` keeps the pieces within the cone's radius
+  and, for a cone narrower than a half-turn, not wholly beyond its edges, eight at a time on AVX2
+  with `GOEXPERIMENT=simd` from columns of the cells' edges (built with the cells once a scan has
+  been asked) and one at a time otherwise, so a scan works out arcs only for what it may see; the
+  gather of candidates was half of a scan. The View benchmarks' scenes see exactly what they saw;
+  elsewhere the depths and shadows are the same, while an entity seen over less than the sweep
+  resolves may differ, because boxes out of reach no longer add casts. `View_Visible` with 1,000
+  entities 25.4 → 15.7 µs, `View_Both` 29.1 → 19.3, `View_Elevated` over a raster 99.2 → 86.8, a
+  forest of cover on 30% of the cells with entities 46.1 → 32.1 (SIMD build; the plain build
+  gains as much from the tight filter alone); `BroadPhase` and `Grid_RebuildPairsQuery` as they
+  were. New benchmarks `View_Tick` (a rebuild and eight scans a tick) and `View_Seam`.
+- Built with `GOEXPERIMENT=simd` on amd64 and run on a CPU with AVX2, a scan works out before each
+  sweep where every ray enters and leaves the box of each entity it may meet, four rays against a
+  box at a time in float64 (`Float64x4`), and casts with what it laid: the same sightings to the
+  bit. Eight rays in float32 were tried and dropped: on boxes with a face on a cell's line, a
+  systematic thing on a grid, the ties went the other way and the set of entities seen changed.
+  In every build each ray comes from one `math.Sincos` instead of `Cos` and `Sin`, and a cast
+  reads its candidate by pointer: `View_Visible` with 100 entities 3.0 → 2.3 µs in the plain
+  build.
+- Over a `Cone.Heights` field, built so, a walk lays the ground of its rays four at a time before
+  it casts them: a round takes four rays one cell on, a ray to a lane of a `Float64x4`, the
+  corners of their cells read lane by lane a round ahead (archsimd has no gather) and the points
+  gathered lane by lane afterwards; every ray records the points the plain walk records, to the
+  bit, with fused multiply-adds wherever the compiler fuses the plain walk's (`GOAMD64=v3`).
+  Lanes walk 95–99% of the rounds. `View_Elevated` `field` with 1,000 entities 242 → 173 µs,
+  with 100 entities 84 → 59; the `profile` rung as it was.
+- `Cone.Heights` is the ground as a lattice of corner heights (`HeightField`: Cols by Rows
+  corners, Cell apart, a cell two flat triangles folded along the diagonal whose corners differ
+  less in height, 0 off the lattice, wrapping axes), read along each ray inside the scan in place
+  of `Ground` and `Profile`: every fold the ray crosses, every cell edge, the step to the next
+  cell's ground, the end, sunk by `Cone.Bend` times the distance squared (a world's curvature), a
+  box's foot and the ground under the eye off the field too, with no call a point; it sees exactly
+  what a scan over the field's profile sees. `View_Elevated` rungs `profile` and `field`: the
+  same lattice through a profile's calls and as the cone's own field, 294 → 242 µs with 1,000
+  entities (173 walked four rays at a time, below).
+- `Space.QueryCone` and `SpaceRead.QueryCone` are the cone's query for a caller: the pieces
+  sharing a capability that may reach into a cone, seams included, as the scan asks it.
+- Breaking: `collide`'s sight interface `QueryableSpace` (internal) asks `QueryCone` in place of
+  `Query`; `SIMD()` names sight too.
+
 ## v1.18.0 — 2026-10-25
 
 **Collisions**

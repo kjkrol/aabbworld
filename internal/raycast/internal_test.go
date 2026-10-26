@@ -40,33 +40,6 @@ func TestShortestDelta(t *testing.T) {
 	}
 }
 
-func TestSplitAxis(t *testing.T) {
-	cases := map[string]struct {
-		lo, hi, size float64
-		want         [][2]float64
-	}{
-		"inside":               {10, 40, 100, [][2]float64{{10, 40}}},
-		"crosses the end":      {80, 120, 100, [][2]float64{{80, 100}, {0, 20}}},
-		"starts negative":      {-20, 10, 100, [][2]float64{{80, 100}, {0, 10}}},
-		"wider than the world": {-50, 200, 100, [][2]float64{{0, 100}}},
-		"zero-sized axis":      {0, 10, 0, [][2]float64{{0, 0}}},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			spans, n := splitAxis(tc.lo, tc.hi, tc.size)
-			got := spans[:n]
-			if len(got) != len(tc.want) {
-				t.Fatalf("splitAxis(%v,%v,%v) = %v, want %v", tc.lo, tc.hi, tc.size, got, tc.want)
-			}
-			for i := range tc.want {
-				if math.Abs(got[i][0]-tc.want[i][0]) > 1e-9 || math.Abs(got[i][1]-tc.want[i][1]) > 1e-9 {
-					t.Errorf("splitAxis(%v,%v,%v) = %v, want %v", tc.lo, tc.hi, tc.size, got, tc.want)
-				}
-			}
-		})
-	}
-}
-
 func TestHitDistance(t *testing.T) {
 	box := geom.NewAABB(geom.NewVec(10.0, 10.0), geom.NewVec(20.0, 20.0))
 	origin := vec{0.0, 15.0}

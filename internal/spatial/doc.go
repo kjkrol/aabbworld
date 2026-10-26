@@ -18,6 +18,10 @@
 // says they have, so the next Query rebuilds the cells. [Grid.Items] lists each position as an
 // [Entry] — a pointer to its box, its id and its capability — at the first call after a Rebuild;
 // [Grid.Item] and [Grid.EntryAABB] answer by id from it, mapping the ids at the first call too.
+// [Grid.QueryCone] answers the part of a cone inside an area: the pieces within its radius and,
+// for a cone narrower than a half-turn, not wholly beyond either edge, in float32 with a slack, so
+// that nothing inside is missed; built with GOEXPERIMENT=simd on a CPU with AVX2 it reads columns
+// of the cells' edges eight pieces at a time, built with the cells once a cone has been asked.
 //
 // [Grid.Pairs] finds every two items sharing a capability whose boxes, grown by a reach of their
 // shorter side, touch. It does not read the cells: it sweeps its own counting-sorted layout of the
