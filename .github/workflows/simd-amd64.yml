@@ -1,0 +1,86 @@
+# The tests in every build on amd64, and the benchmarks of a change against its base on one
+# runner, so the two share a CPU.
+name: simd-amd64
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base:
+        description: The ref to compare against
+        default: main
+      count:
+        description: Runs of each benchmark
+        default: "8"
+
+permissions:
+  contents: read
+
+env:
+  BASE: ${{ inputs.base || github.base_ref || 'main' }}
+  COUNT: ${{ inputs.count || '8' }}
+  BENCH: Benchmark_(BroadPhase|Grid_RebuildPairsQuery|Column_RebuildQueryTick|View_Visible|View_Both|View_Tick|View_Cover|Solver_Dense)
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [test, test-simd, test-simd-128, test-simd-emulated, vet-simd]
+    name: make ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: CPU
+        run: |
+          lscpu | grep 'Model name'
+          grep -o -w -E 'avx2|avx512f|vpclmulqdq' /proc/cpuinfo | sort -u | tr '\n' ' '; echo
+      - run: make ${{ matrix.target }}
+
+  bench:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: CPU
+        run: |
+          lscpu | grep 'Model name'
+          grep -o -w -E 'avx2|avx512f|vpclmulqdq' /proc/cpuinfo | sort -u | tr '\n' ' '; echo
+      - name: Build
+        env:
+          GOEXPERIMENT: simd
+        run: |
+          git worktree add /tmp/base "origin/$BASE"
+          (cd /tmp/base && go test -c -o /tmp/base.test ./bench)
+          go test -c -o /tmp/head.test ./bench
+          go install golang.org/x/perf/cmd/benchstat@latest
+      - name: Bench
+        run: |
+          mkdir -p results
+          for i in $(seq "$COUNT"); do
+            /tmp/base.test -test.run '^$' -test.bench "$BENCH" -test.benchmem >> results/base.txt
+            /tmp/head.test -test.run '^$' -test.bench "$BENCH" -test.benchmem >> results/head.txt
+            GODEBUG=simd=0 /tmp/head.test -test.run '^$' -test.bench "$BENCH" -test.benchmem >> results/head-scalar.txt
+          done
+      - name: Compare
+        run: |
+          {
+            echo '## base → head, both built with GOEXPERIMENT=simd'
+            echo '```'; benchstat results/base.txt results/head.txt; echo '```'
+            echo '## head: GODEBUG=simd=0 → wide'
+            echo '```'; benchstat results/head-scalar.txt results/head.txt; echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: results/

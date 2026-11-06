@@ -27,7 +27,9 @@
 - `internal/simdx`: what the kernels need beside `simd` — a mask as a bitmask, the padding of a
   slice loaded a vector at a time, which kernels run. A kernel over `simd`'s vectors is a
   function: the compiler's rewrite of `simd` code fails on methods.
-- Makefile: `test-simd-128`, `test-simd-emulated`, `vet-simd`.
+- Makefile: `test-simd-128`, `test-simd-emulated`, `vet-simd`. CI:
+  `.github/workflows/simd-amd64.yml` runs them and the tests on amd64, and benchmarks a pull
+  request against its base on one runner.
 
 ## v1.19.0 — 2026-10-26
 
