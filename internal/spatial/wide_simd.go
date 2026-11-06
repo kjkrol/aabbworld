@@ -4,8 +4,10 @@ package spatial
 
 import (
 	"math"
+	"simd"
 	"slices"
 
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/internal/simdx"
 	"github.com/kjkrol/uid"
 )
@@ -17,6 +19,18 @@ var wide = simdx.On() || simdx.ArchFirst()
 // avx2 says the kernels written for AVX2 sweep and walk rather than simd's: on amd64 they are as
 // fast or faster at every width simd gives. Tests turn it off to try simd's.
 var avx2 = simdx.ArchFirst()
+
+// wideQuery says Query tests the pieces of a crowded grid's cells a vector at a time, on simd's
+// vectors; tests turn it off to compare. With AVX2 it stays plain: there is no AVX2 kernel for
+// it, and simd's lost to the plain test on some CPUs with AVX2 while gaining on others.
+var wideQuery = simdx.On() && !simdx.ArchFirst()
+
+// queryWideFrom is the fewest vectors of pieces the occupied cells must hold on average for Query
+// to go wide: below one each, loading a vector for a piece or two costs more than it saves.
+var queryWideFrom = 1
+
+// lanes32 is how many float32 a vector holds.
+func lanes32() int { return simd.BroadcastFloat32s(0).Len() }
 
 // visitWide tests every two entries of one cell a vector of the rest at a time, and takes the
 // pairs this cell owns.
@@ -36,6 +50,12 @@ func (g *Grid) walkConeWide(q *coneQuery, want Capability, fn func(uid.UID64)) i
 	return walkConeLanes(g, q, want, fn)
 }
 
+// queryWide is Query over cells x1, y1 to x2, y2 of area, a vector of a cell's pieces at a time.
+func (g *Grid) queryWide(area geom.AABB, x1, y1, x2, y2 uint32, want Capability,
+	fn func(uid.UID64)) int {
+	return queryLanes(g, area, x1, y1, x2, y2, want, fn)
+}
+
 // sweepCols is a cell's boxes one edge to a slice, so a vector of neighbours loads at once. Each
 // slice runs simdx.Pad32 past the cell, for loads that start near its end.
 type sweepCols struct{ minX, minY, maxX, maxY []float32 }
@@ -51,11 +71,11 @@ func (c *sweepCols) fill(entries []sweepEntry) {
 	}
 }
 
-// coneCols is the cells' boxes one edge to a slice, at the cells' positions, so a vector of pieces
+// cellCols is the cells' boxes one edge to a slice, at the cells' positions, so a vector of pieces
 // loads at once. Each slice runs simdx.Pad32 past the cells, for loads that start near their end.
-type coneCols struct{ minX, minY, maxX, maxY []float32 }
+type cellCols struct{ minX, minY, maxX, maxY []float32 }
 
-func (c *coneCols) fill(cells []gridCell) {
+func (c *cellCols) fill(cells []gridCell) {
 	n := len(cells) + simdx.Pad32
 	c.minX, c.minY = slices.Grow(c.minX[:0], n)[:n], slices.Grow(c.minY[:0], n)[:n]
 	c.maxX, c.maxY = slices.Grow(c.maxX[:0], n)[:n], slices.Grow(c.maxY[:0], n)[:n]

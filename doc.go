@@ -125,10 +125,10 @@
 // one box against the next several, their edges loaded side by side, the cell's claim on each pair
 // checked in the same pass. It finds the same pairs, in the same order, as the plain sweep, which
 // every other build runs. Crowds in large buckets gain most, sparse cells nothing; see
-// BENCHMARKS.md. Sight's cone tests a cell's pieces a vector at a time from columns of the cells'
-// edges, built with the cells once a scan has been asked, and sight works out before each sweep
-// where its rays enter and leave the boxes in sight, a vector of rays against a box at a time. It
-// reports what the plain code reports, to the bit.
+// BENCHMARKS.md. Sight's cone, and Query without AVX2, test a cell's pieces a vector at a time
+// from columns of the cells' edges, built with the cells once either has been asked; sight works
+// out before each sweep where its rays enter and leave the boxes in sight, a vector of rays
+// against a box at a time. It reports what the plain code reports, to the bit.
 //
 // On an amd64 CPU with AVX2 the sweep, the cone and the rays run on kernels written for AVX2
 // instead, eight boxes or four rays at a time: there they are as fast as simd's or faster, at

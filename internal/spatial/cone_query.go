@@ -38,7 +38,7 @@ func (g *Grid) colsUp() {
 		g.cols.fill(g.cells)
 		g.colsBehind.Store(false)
 	}
-	g.coned = true
+	g.colsAsked = true
 	g.mu.Unlock()
 }
 

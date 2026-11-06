@@ -1,6 +1,6 @@
 ---
 name: simd
-description: aabbworld's SIMD kernels, built with GOEXPERIMENT=simd on amd64, arm64 or wasm — the collision pair sweep a vector of boxes at a time, sight's cone a vector of pieces at a time, the slabs a vector of rays at a time, written for AVX2 and again on the portable simd package, and the heightfield walked four rays in lockstep on AVX2: the gate and the file pattern, why each is as wide as it is, what stays scalar on purpose, the invariants (the same pairs and sightings to the bit) and the tests that hold them, how much each gives and how to measure it. Use when touching a *_simd.go, *_lanes.go or wide_*.go file or a scalar twin, adding a kernel, chasing a difference between the SIMD and the plain build, or measuring either.
+description: aabbworld's SIMD kernels, built with GOEXPERIMENT=simd on amd64, arm64 or wasm — the collision pair sweep a vector of boxes at a time, Query's and sight's cone a vector of pieces at a time, the slabs a vector of rays at a time, written for AVX2 and again on the portable simd package, and the heightfield walked four rays in lockstep on AVX2: the gate and the file pattern, why each is as wide as it is, what stays scalar on purpose, the invariants (the same pairs and sightings to the bit) and the tests that hold them, how much each gives and how to measure it. Use when touching a *_simd.go, *_lanes.go or wide_*.go file or a scalar twin, adding a kernel, chasing a difference between the SIMD and the plain build, or measuring either.
 ---
 
 # simd
@@ -21,17 +21,19 @@ numbers and the method are `BENCHMARKS.md` ("Wide pair sweep", "Sight in SIMD", 
 - Run: in each package `wide_simd.go`, under `goexperiment.simd && (amd64 || arm64 || wasm)`,
   holds the gates — `wide` (`simdx.On() || simdx.ArchFirst()`), `avx2` (`simdx.ArchFirst()`: on
   amd64 the AVX2 kernels are as fast or faster than simd's at every width, and twice as wide
-  where simd holds a CPU without VPCLMULQDQ to 128 bits), — the columns, and the wrappers the callers name (`visitWide`, `walkConeWide`,
-  `fillWide`, `invertWide`), each choosing `avx2`'s kernel or simd's. Its twin
+  where simd holds a CPU without VPCLMULQDQ to 128 bits), `wideQuery` and `queryWideFrom` in
+  spatial — the columns, and the wrappers the callers name (`visitWide`, `walkConeWide`,
+  `queryWide`, `fillWide`, `invertWide`), each choosing `avx2`'s kernel or simd's. Its twin
   `wide_scalar.go` holds `const wide = false` and wrappers that do nothing. `GODEBUG=simd=0`
   makes `simdx.On` and `ArchFirst` false: no kernel runs. `aabbworld.SIMD()` reports
   `spatial.Wide()`.
 - The AVX2 kernels are `*_simd.go` under `goexperiment.simd && amd64`, with twins `*_scalar.go`
   that do nothing: `pair_sweep_simd.go` (`visitAVX2`), `cone_query_simd.go` (`walkConeAVX2`),
   `slab_simd.go` (`fillAVX2`, `invertAVX2`), `heightfield_simd.go` (`walkWide`, AVX2 only). simd's
-  are `*_lanes.go` beside them (`visitLanes`, `walkConeLanes`, `fillLanes`, `invertLanes`), needing no twin: only `wide_simd.go` calls them. The fork is one `if wide` at
+  are `*_lanes.go` beside them (`visitLanes`, `walkConeLanes`, `queryLanes`, `fillLanes`,
+  `invertLanes`), needing no twin: only `wide_simd.go` calls them. The fork is one `if wide` at
   the caller: `sweep.go` (`walk`, and the lockstep on `wide && avx2`), `slab.go` (`fill`,
-  `laid`), `pair_sweep.go`, `grid.go` (the columns),
+  `laid`), `pair_sweep.go`, `grid.go` (the columns, and `Query` on `wideQuery`),
   `cone_query.go`.
 - `simdx.Settle()` before every callback out of a kernel and at its exit (the SSE code after it
   would pay the transition); `export_wide_test.go` opens `wide` to the tests (`SetWide`) and runs
@@ -48,9 +50,16 @@ numbers and the method are `BENCHMARKS.md` ("Wide pair sweep", "Sight in SIMD", 
   stage): the pieces of the cells under the cone's rectangle tested eight at a time, `Float32x8`,
   or a vector of `Float32s` — the radius, the wedge
   (a cone narrower than a half-turn), the owner cell — from columns of the cells' edges built
-  with the cells once a scan has been asked (`g.coned`; the plain build never pays for them).
+  with the cells once a scan or a wide query has been asked (`g.colsAsked`; the plain build
+  never pays for them).
   The gather was half a scan: `View_Visible` 1,000 entities 25.4 → 15.7 µs with the slabs; the
   plain build 26.1 → 16.8 from the tight filter alone.
+- **The query** (`internal/spatial/grid_query_lanes.go`, simd's only, so never with AVX2: it
+  probed the crowd 3× slower than the plain test on an EPYC 7763, 4× faster on a 9V74): `Query` tests a cell's
+  pieces a vector at a time from the cone's columns, a cell of fewer than a vector a piece at a
+  time, and only while the occupied cells hold `queryWideFrom` vectors of pieces each on average
+  (`g.occupied`, counted as the cells are indexed): below that the plain test is as fast or
+  faster. The crowd probed per entity 12.3 → 4.4 ms on Neon.
 - **The slabs** (`internal/raycast/slab_simd.go`, `slab_lanes.go`): between two events of a walk the active set
   is fixed, so each active box's `near`/`far` is laid for four angles at a time, `Float64x4`,
   or a vector of `Float64s`,
@@ -83,6 +92,13 @@ scatter), every callback. A kernel over them would move the cost, not remove it.
   `_WideNeverPairsABoxWithItself`.
 - The cone query keeps what the plain filter keeps: `TestQueryCone_WideFindsWhatNarrowFinds`,
   `_WideAgreesOnEdgesAndNaN`, `_ColumnsFollowTheCells`, `_ManyGoroutinesAskAFreshGridAsOneDoes`.
+- Query reports what the plain Query reports, in the same order, and goes wide only over crowded
+  cells: `TestQuery_WideFindsWhatNarrowFinds`, `_WideAgreesOnEdgesAndNaN`,
+  `_ColumnsFollowTheCells`, `_WideOnlyOverCrowdedCells`, `_ManyGoroutinesAskAFreshGridAsOneDoes`,
+  `_ColumnsServeConesAndQueriesAlike`; with AVX2 it stays plain:
+  `_WideOnSimdsVectorsOnlyWithoutAVX2`. Through a Space, the seams' images go wide too:
+  `TestSpace_Query_FindsEveryBoxAcrossTheSeams` (a crowded torus against a brute force; its areas
+  keep off the world's last unit, which the grid holds to its edge).
 - `simdx.Bits32` and `Bits64` set one bit a lane, and the way through memory, wasm's, sets the
   same: `TestBits_OneBitALane`, `_StoredAgreesWithTheMask`.
 - Every lane of a slab is `hitDistance`: `TestFillWide_EveryLaneIsHitDistance`,
@@ -94,7 +110,8 @@ scatter), every callback. A kernel over them would move the cost, not remove it.
   oracle `fieldOracle`); a scan over a field sees what one over its profile sees.
 - `make test-simd` runs the suite built wide, `make test` plain, `make test-simd-128` built wide
   with simd's vectors held to 128 bits (on AVX2, the width of a CPU without VPCLMULQDQ),
-  `make test-simd-emulated` built wide with no kernel running, and `make vet-simd` vets the build for amd64, arm64 and wasm. A change to a kernel runs them,
+  `make test-simd-emulated` built wide with no kernel running, and `make vet-simd` vets the build for amd64, arm64 and wasm; CI
+  (`.github/workflows/simd-amd64.yml`) runs them all on amd64. A change to a kernel runs them,
   the walk once under `GOAMD64=v3`, and the suite on an arm64 machine.
 
 ## Measuring
@@ -117,11 +134,11 @@ with `compare.py`, and the fairness rules for the siblings.
   95–99%) before widening; a block shorter than the width is not worth the gate (`minWide`,
   `wideFrom`).
 - Columns built always cost the plain path (+7…10% once): build them where they pay and lazily
-  (`g.coned`, the crowded cell's `fill`).
+  (`g.colsAsked`, the crowded cell's `fill`).
 - `.Add(zero)` after `Max` turns a −0 into +0 as `math.Max` has it; without it a lane differs
   from the scalar on a ray along an axis.
 - The twin files keep every name the callers use (`wide`, `fillWide`, `walkWide`,
-  `invertWide`, `visitWide`, `walkConeWide`): the plain build is what CI compiles.
+  `invertWide`, `visitWide`, `walkConeWide`, `queryWide`): the plain build is what CI compiles.
 - A kernel over simd's vectors is a function, not a method: the compiler's rewrite of simd code
   for each width fails on methods ("missing Types entry"). It has other crashes (a nil pointer
   on a test holding its vectors among `t.Fatalf`s): keep vectors in small functions of their own.

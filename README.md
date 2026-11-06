@@ -57,8 +57,8 @@ go get github.com/kjkrol/aabbworld
 ```
 
 Optionally, build with `GOEXPERIMENT=simd`: on amd64, arm64 or wasm, the collision tick then tests
-the boxes of a crowded cell a vector at a time, and sight tests its cone's likewise, with the same
-results (see [Performance](#performance)); `aabbworld.SIMD()` reports whether it does.
+the boxes of a crowded cell a vector at a time, and queries and sight test theirs likewise, with the
+same results (see [Performance](#performance)); `aabbworld.SIMD()` reports whether it does.
 
 <a id="features"></a>
 # ✨ Key Features
