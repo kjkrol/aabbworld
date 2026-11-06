@@ -119,17 +119,22 @@
 //
 // # SIMD
 //
-// Built with GOEXPERIMENT=simd on amd64 and run on a CPU with AVX2, the collision engine's pair
-// sweep tests a crowded cell — eight entries or more — eight boxes at a time: one box against the
-// next eight, their edges loaded side by side, the cell's claim on each pair checked in the same
-// pass. It finds the same pairs, in the same order, as the plain sweep, which every other build and
-// CPU runs. Crowds in large buckets gain most, sparse cells nothing; see BENCHMARKS.md. Sight,
-// built so, asks the grid for the boxes its cone may reach eight at a time, from columns of the
-// cells' edges built with the cells once a scan has been asked, and works out before each sweep
-// where its rays enter and leave the boxes in sight, four rays against a box at a time, and over a
-// Cone.Heights field walks the ground of four rays at a time, a ray to a lane, the corners of their
-// cells read lane by lane; it sees what the plain scan sees, to the bit. [SIMD] reports which
-// build runs.
+// Built with GOEXPERIMENT=simd on amd64, arm64 or wasm, the wide code runs on the vectors of the
+// simd package: 128 bits on Neon and wasm, 256 or 512 on amd64 as the CPU allows. The collision
+// engine's pair sweep tests a crowded cell — eight entries or more — a vector of boxes at a time:
+// one box against the next several, their edges loaded side by side, the cell's claim on each pair
+// checked in the same pass. It finds the same pairs, in the same order, as the plain sweep, which
+// every other build runs. Crowds in large buckets gain most, sparse cells nothing; see
+// BENCHMARKS.md. Sight's cone tests a cell's pieces a vector at a time from columns of the cells'
+// edges, built with the cells once a scan has been asked, and sight works out before each sweep
+// where its rays enter and leave the boxes in sight, a vector of rays against a box at a time. It
+// reports what the plain code reports, to the bit.
+//
+// On an amd64 CPU with AVX2 the sweep, the cone and the rays run on kernels written for AVX2
+// instead, eight boxes or four rays at a time: there they are as fast as simd's or faster, at
+// every width simd gives. Over a Cone.Heights field, with AVX2, sight walks the ground of four rays
+// at a time, a ray to a lane, the corners of their cells read lane by lane. GODEBUG=simd=0 turns
+// every kernel off; [SIMD] reports whether any runs.
 //
 // # Package dependencies
 //

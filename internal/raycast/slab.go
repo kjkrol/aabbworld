@@ -3,6 +3,8 @@ package raycast
 import (
 	"math"
 	"slices"
+
+	"github.com/kjkrol/aabbworld/internal/simdx"
 )
 
 // hitDistance reports where a unit ray enters box (zero from inside) and leaves it, if at all.
@@ -55,7 +57,7 @@ func rayDir(abs float64) vec {
 	return vec{cos, sin}.round32()
 }
 
-// minWide is the fewest angles a candidate is active at for its slabs to be laid four at a time.
+// minWide is the fewest angles a candidate is active at for its slabs to be laid a vector at a time.
 const minWide = 2
 
 // slabs is hitDistance of the rays of one walk through the boxes of the candidates active at their
@@ -114,9 +116,9 @@ func (s *slabs) lay(
 		r.at = size - r.from
 		size += r.to - r.from
 	}
-	// Three past the last run, for stores of a whole vector near its end.
-	s.near = slices.Grow(s.near[:0], int(size)+3)[:size+3]
-	s.far = slices.Grow(s.far[:0], int(size)+3)[:size+3]
+	// simdx.Pad64 past the last run, for stores of a whole vector near its end.
+	s.near = slices.Grow(s.near[:0], int(size)+simdx.Pad64)[:size+simdx.Pad64]
+	s.far = slices.Grow(s.far[:0], int(size)+simdx.Pad64)[:size+simdx.Pad64]
 
 	// Runs are filled in the order they lie in: what a store writes past one is overwritten by the
 	// next.
@@ -133,7 +135,8 @@ func (s *slabs) aim() {
 		return
 	}
 	n := len(s.dirs)
-	s.ix, s.iy = slices.Grow(s.ix[:0], n+3)[:n+3], slices.Grow(s.iy[:0], n+3)[:n+3]
+	m := n + simdx.Pad64
+	s.ix, s.iy = slices.Grow(s.ix[:0], m)[:m], slices.Grow(s.iy[:0], m)[:m]
 	s.along = s.along[:0]
 	for j, d := range s.dirs {
 		s.ix[j], s.iy[j] = d.x, d.y
@@ -141,7 +144,7 @@ func (s *slabs) aim() {
 			s.along = append(s.along, int32(j))
 		}
 	}
-	for j := n; j < n+3; j++ {
+	for j := n; j < m; j++ {
 		s.ix[j], s.iy[j] = 1, 1
 	}
 	invertWide(s.ix)

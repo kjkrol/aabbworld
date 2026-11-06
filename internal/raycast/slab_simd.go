@@ -4,13 +4,9 @@ package raycast
 
 import "simd/archsimd"
 
-// wide says the slabs of a walk are laid four angles at a time; tests turn it off to compare. The
-// broadcasts take AVX2.
-var wide = archsimd.X86.AVX2()
-
-// fillWide lays the slabs of a box, relative to the origin, against the rays of run's angles, four
+// fillAVX2 lays the slabs of a box, relative to the origin, against the rays of run's angles, four
 // at a time, storing up to three past the run. Each lane works out what hitDistance does.
-func (s *slabs) fillWide(x1, y1, x2, y2 float64, r run) {
+func (s *slabs) fillAVX2(x1, y1, x2, y2 float64, r run) {
 	bx1, bx2 := archsimd.BroadcastFloat64x4(x1), archsimd.BroadcastFloat64x4(x2)
 	by1, by2 := archsimd.BroadcastFloat64x4(y1), archsimd.BroadcastFloat64x4(y2)
 	var zero archsimd.Float64x4
@@ -32,9 +28,9 @@ func (s *slabs) fillWide(x1, y1, x2, y2 float64, r run) {
 	archsimd.ClearAVXUpperBits()
 }
 
-// invertWide turns every value of v into its reciprocal, four at a time; len(v) is three past a
+// invertAVX2 turns every value of v into its reciprocal, four at a time; len(v) is three past a
 // whole number of vectors at least.
-func invertWide(v []float64) {
+func invertAVX2(v []float64) {
 	one := archsimd.BroadcastFloat64x4(1)
 	for j := 0; j+4 <= len(v); j += 4 {
 		x := archsimd.LoadFloat64x4Array((*[4]float64)(v[j : j+4]))

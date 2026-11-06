@@ -56,9 +56,9 @@ aabbworld requires **Go 1.27** or newer.
 go get github.com/kjkrol/aabbworld
 ```
 
-Optionally, build with `GOEXPERIMENT=simd`: on amd64 with AVX2, the collision tick then tests the
-boxes of a crowded cell eight at a time, with the same results (see [Performance](#performance));
-`aabbworld.SIMD()` reports whether it does.
+Optionally, build with `GOEXPERIMENT=simd`: on amd64, arm64 or wasm, the collision tick then tests
+the boxes of a crowded cell a vector at a time, and sight tests its cone's likewise, with the same
+results (see [Performance](#performance)); `aabbworld.SIMD()` reports whether it does.
 
 <a id="features"></a>
 # ✨ Key Features

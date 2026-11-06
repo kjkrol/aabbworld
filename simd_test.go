@@ -1,4 +1,4 @@
-//go:build !(goexperiment.simd && amd64)
+//go:build !(goexperiment.simd && (amd64 || arm64 || wasm))
 
 package aabbworld_test
 
@@ -8,8 +8,8 @@ import (
 	"github.com/kjkrol/aabbworld"
 )
 
-func TestSIMD_OffWithoutTheExperimentOnAmd64(t *testing.T) {
+func TestSIMD_OffWithoutTheExperiment(t *testing.T) {
 	if aabbworld.SIMD() {
-		t.Error("SIMD() = true in a build without GOEXPERIMENT=simd on amd64")
+		t.Error("SIMD() = true in a build without GOEXPERIMENT=simd")
 	}
 }

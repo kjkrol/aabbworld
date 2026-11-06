@@ -136,7 +136,7 @@ func newConeEdge(cx, cy float64) coneEdge {
 }
 
 // holds reports whether piece b meets the area, lies within the radius and is past neither edge,
-// by the steps and the comparisons the wide walk makes eight at a time.
+// by the steps and the comparisons the wide walk makes a vector at a time.
 func (q *coneQuery) holds(b *geom.AABB) bool {
 	if !(b.TopLeft.X <= q.area.BottomRight.X && b.BottomRight.X >= q.area.TopLeft.X &&
 		b.TopLeft.Y <= q.area.BottomRight.Y && b.BottomRight.Y >= q.area.TopLeft.Y) {

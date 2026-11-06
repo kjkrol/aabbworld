@@ -5,15 +5,29 @@ RESULT_FILE := bench_results/bench_$(COMMIT_DATE)_$(COMMIT_HASH)$(DIRTY).txt
 
 BENCH_COUNT ?= 5
 
-.PHONY: test test-simd bench bench-simd bench-save bench-save-simd
+.PHONY: test test-simd test-simd-128 test-simd-emulated vet-simd bench bench-simd bench-save bench-save-simd
 
 ## test: runs every test, examples included
 test:
 	go test ./...
 
-## test-simd: runs every test built with the simd experiment, the wide pair sweep included
+## test-simd: runs every test built with the simd experiment, each wide kernel the CPU runs included
 test-simd:
 	GOEXPERIMENT=simd go test ./...
+
+## test-simd-128: runs every test built with the simd experiment and simd's vectors held to 128 bits
+test-simd-128:
+	GOEXPERIMENT=simd GODEBUG=simd=128 go test ./...
+
+## test-simd-emulated: runs every test built with the simd experiment and simd emulated: no kernel runs
+test-simd-emulated:
+	GOEXPERIMENT=simd GODEBUG=simd=0 go test ./...
+
+## vet-simd: vets the simd build for amd64, arm64 and wasm, whatever this machine is
+vet-simd:
+	GOEXPERIMENT=simd GOARCH=amd64 go vet ./...
+	GOEXPERIMENT=simd GOARCH=arm64 go vet ./...
+	GOEXPERIMENT=simd GOOS=js GOARCH=wasm go vet ./...
 
 ## bench: runs the whole suite once, with allocations
 bench:

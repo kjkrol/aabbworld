@@ -383,7 +383,9 @@ make bench-simd        # the suite once, built with GOEXPERIMENT=simd
 make bench-save-simd   # bench-save so built, into a file marked -simd
 ```
 
-`make test-simd` runs the tests built so, comparing the wide sweep with the plain one.
+`make test-simd` runs the tests built so, comparing every wide kernel the CPU runs with the plain
+code; `make test-simd-128` holds simd's vectors to 128 bits, `make test-simd-emulated` runs them
+with none, and `make vet-simd` vets the build for amd64, arm64 and wasm.
 
 To judge a change on this or any drifting machine, keep a copy of the baseline tree and run the two
 alternately, then compare medians:

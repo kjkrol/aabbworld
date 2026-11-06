@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+**SIMD**
+- Built with `GOEXPERIMENT=simd`, the wide code runs on arm64 and wasm too: the pair sweep, the
+  cone query and the slabs have kernels on the portable `simd` package beside those for AVX2, at
+  whatever width it runs (128 bits on Neon and wasm). They find the same pairs and see the same
+  entities to the bit, in the same order. On an M2 Pro, against the same binary with
+  `GODEBUG=simd=0`: the crowd's collision tick 6.19 → 2.71 ms, `View_Tick` with 10,000 entities
+  2.73 → 2.08, `View_Visible` with 1,000 entities 11.0 → 9.96 µs; with 100 entities
+  `View_Visible` and `View_Both` 4–5% slower.
+- On amd64 with AVX2 the AVX2 kernels keep running, whatever width `simd` gives, and only they: at
+  256 bits on an EPYC 9V74 `simd`'s sweep ticked the crowd 21% slower than the AVX2 one, and
+  `simd` holds CPUs without VPCLMULQDQ to 128 bits. The heightfield lockstep stays AVX2 only. On
+  an EPYC 7763 they tick, scan and sweep within 2% of v1.19.0.
+- `GODEBUG=simd=0` turns every kernel off, the AVX2 ones included; `SIMD()` reports whether any
+  runs, on amd64, arm64 or wasm.
+- `internal/simdx`: what the kernels need beside `simd` — a mask as a bitmask, the padding of a
+  slice loaded a vector at a time, which kernels run. A kernel over `simd`'s vectors is a
+  function: the compiler's rewrite of `simd` code fails on methods.
+- Makefile: `test-simd-128`, `test-simd-emulated`, `vet-simd`.
+
 ## v1.19.0 — 2026-10-26
 
 **Sight**

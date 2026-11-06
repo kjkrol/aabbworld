@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/internal/simdx"
 	"github.com/kjkrol/uid"
 )
 
@@ -15,7 +16,7 @@ func filled(origin, dir vec, box rect, n int) (near, far []float64) {
 	var s slabs
 	s.dirs = slices.Repeat([]vec{dir}, n)
 	s.aim()
-	s.near, s.far = make([]float64, n+3), make([]float64, n+3)
+	s.near, s.far = make([]float64, n+simdx.Pad64), make([]float64, n+simdx.Pad64)
 	s.fill(origin, box, run{from: 0, to: int32(n)})
 	return s.near[:n], s.far[:n]
 }

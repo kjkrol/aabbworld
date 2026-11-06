@@ -62,14 +62,15 @@ func sameSight(t *testing.T, what string, narrow, wide sight) {
 	}
 }
 
-// compareWide scans s through c with the slabs worked out as each ray is cast and laid four angles
-// at a time, and checks both see the same.
+// compareWide scans s through c with the slabs worked out as each ray is cast and laid a vector
+// of angles at a time by every wide kernel, and checks all see the same.
 func compareWide(t *testing.T, what string, s raycast.QueryableSpace, c raycast.Cone) {
 	t.Helper()
 	raycast.SetWide(t, false)
 	narrow := sightOf(t, s, c)
-	raycast.SetWide(t, true)
-	sameSight(t, what, narrow, sightOf(t, s, c))
+	raycast.EachKernel(t, func(kernel string) {
+		sameSight(t, what+", "+kernel, narrow, sightOf(t, s, c))
+	})
 }
 
 func TestScan_WideSeesWhatNarrowSees(t *testing.T) {
@@ -142,10 +143,12 @@ func TestScan_WideSeesWhatNarrowSeesOverAField(t *testing.T) {
 		for k := 5; k <= 8; k++ {
 			raycast.SetWide(t, false)
 			narrow := scan(t, s, eye, cone).Depths(k, nil)
-			raycast.SetWide(t, true)
-			if wide := scan(t, s, eye, cone).Depths(k, nil); !slices.Equal(wide, narrow) {
-				t.Errorf("%s: the reach at %d angles wide %v, narrow %v", what, k, wide, narrow)
-			}
+			raycast.EachKernel(t, func(kernel string) {
+				if wide := scan(t, s, eye, cone).Depths(k, nil); !slices.Equal(wide, narrow) {
+					t.Errorf("%s, %s: the reach at %d angles wide %v, narrow %v", what, kernel, k,
+						wide, narrow)
+				}
+			})
 		}
 	}
 }
