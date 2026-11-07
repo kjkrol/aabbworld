@@ -27,8 +27,8 @@ func queryLanes(g *Grid, area geom.AABB, x1, y1, x2, y2 uint32, want Capability,
 		ownY := every(oy)
 		for x := x1; x <= x2; x++ {
 			ox := g.ownedFrom(x, x1)
-			cell := y*g.side + x
-			start, end := int(g.starts[cell]), int(g.starts[cell+1])
+			from, to := g.spans.entries(y*g.side + x)
+			start, end := int(from), int(to)
 			// A cell of fewer pieces than a vector holds is tested a piece at a time, as the
 			// lanes test it: loading a vector for one or two costs more than it saves.
 			if end-start < w {

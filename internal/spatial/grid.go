@@ -78,15 +78,13 @@ type Grid struct {
 	mu       sync.Mutex  // whoever reads first after a Rebuild or Invalidate brings the grid up
 
 	pieces []gridPiece
-	starts []uint32
-	cursor []uint32
+	spans  spans
 	cells  []gridCell
 	sweep  pairSweep
 
 	cols       cellCols    // the cells' boxes as QueryCone and Query load them, a vector at a time
 	colsAsked  bool        // a cone or a wide query was asked: the cells are built with their columns
 	colsBehind atomic.Bool // the columns are behind the cells
-	occupied   int         // the cells holding a piece or more
 
 	listingID   uid.UID64
 	listingCaps Capability
@@ -199,14 +197,7 @@ func (g *Grid) index() {
 		g.mapIDs()
 	}
 	g.pieces = g.pieces[:0]
-	cells := int(g.side) * int(g.side)
-	if cap(g.starts) < cells+1 {
-		g.starts = make([]uint32, cells+1)
-		g.cursor = make([]uint32, cells)
-	}
-	g.starts = g.starts[:cells+1]
-	g.cursor = g.cursor[:cells]
-	clear(g.starts)
+	g.spans.reset(int(g.side) * int(g.side))
 
 	for ci := range g.columns {
 		c := &g.columns[ci]
@@ -222,29 +213,16 @@ func (g *Grid) index() {
 		}
 	}
 
-	occupied := 0
-	for i := range g.starts {
-		if g.starts[i] != 0 {
-			occupied++
-		}
-		if i > 0 {
-			g.starts[i] += g.starts[i-1]
-		}
-	}
-	g.occupied = occupied
-	copy(g.cursor, g.starts)
-	total := int(g.starts[cells])
+	total := g.spans.place()
 	if cap(g.cells) < total {
 		g.cells = make([]gridCell, total)
 	}
 	g.cells = g.cells[:total]
-	for i := range g.pieces {
+	for i := len(g.pieces) - 1; i >= 0; i-- {
 		p := &g.pieces[i]
 		for y := p.y1; y <= p.y2; y++ {
 			for x := p.x1; x <= p.x2; x++ {
-				cell := y*g.side + x
-				g.cells[g.cursor[cell]] = p.gridCell
-				g.cursor[cell]++
+				g.cells[g.spans.take(y*g.side+x)] = p.gridCell
 			}
 		}
 	}
@@ -270,7 +248,7 @@ func (g *Grid) add(box geom.AABB, id uid.UID64, caps Capability) {
 	}
 	for y := p.y1; y <= p.y2; y++ {
 		for x := p.x1; x <= p.x2; x++ {
-			g.starts[y*g.side+x+1]++
+			g.spans.count(y*g.side + x)
 		}
 	}
 	g.pieces = append(g.pieces, p)
@@ -355,7 +333,10 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	g.Ready()
 	x1, y1 := g.cellOf(area.TopLeft.X), g.cellOf(area.TopLeft.Y)
 	x2, y2 := g.cellOf(area.BottomRight.X), g.cellOf(area.BottomRight.Y)
-	if wideQuery && len(g.cells) >= queryWideFrom*lanes32()*g.occupied {
+	if listed, ok := g.spans.listedIn(x1, y1, x2, y2, g.side); ok {
+		return g.queryListed(listed, area, x1, y1, x2, want, fn)
+	}
+	if wideQuery && len(g.cells) >= queryWideFrom*lanes32()*g.spans.occupied {
 		if g.colsBehind.Load() {
 			g.colsUp()
 		}
@@ -364,8 +345,8 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	found := 0
 	for y := y1; y <= y2; y++ {
 		for x := x1; x <= x2; x++ {
-			cell := y*g.side + x
-			for _, c := range g.cells[g.starts[cell]:g.starts[cell+1]] {
+			from, to := g.spans.entries(y*g.side + x)
+			for _, c := range g.cells[from:to] {
 				if !c.caps.matches(want) || !area.Intersects(c.box) {
 					continue
 				}
@@ -375,6 +356,31 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 				fn(c.id)
 				found++
 			}
+		}
+	}
+	return found
+}
+
+// queryListed is Query over the listed cells of the area alone, in the order Query walks them.
+func (g *Grid) queryListed(
+	listed []uint32, area geom.AABB, x1, y1, x2 uint32, want Capability, fn func(uid.UID64),
+) int {
+	found := 0
+	for _, cell := range listed {
+		x, y := cell%g.side, cell/g.side
+		if x < x1 || x > x2 {
+			continue
+		}
+		from, to := g.spans.entries(cell)
+		for _, c := range g.cells[from:to] {
+			if !c.caps.matches(want) || !area.Intersects(c.box) {
+				continue
+			}
+			if max(g.cellOf(c.box.TopLeft.X), x1) != x || max(g.cellOf(c.box.TopLeft.Y), y1) != y {
+				continue
+			}
+			fn(c.id)
+			found++
 		}
 	}
 	return found

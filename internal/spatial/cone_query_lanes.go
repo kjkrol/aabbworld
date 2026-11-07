@@ -28,9 +28,9 @@ func walkConeLanes(g *Grid, q *coneQuery, want Capability, fn func(uid.UID64)) i
 		ownY := every(g.ownedFrom(y, q.y1))
 		for x := q.x1; x <= q.x2; x++ {
 			ownX := every(g.ownedFrom(x, q.x1))
-			cell := y*g.side + x
-			end := int(g.starts[cell+1])
-			for j := int(g.starts[cell]); j < end; j += w {
+			from, to := g.spans.entries(y*g.side + x)
+			end := int(to)
+			for j := int(from); j < end; j += w {
 				minX, minY := simd.LoadFloat32s(c.minX[j:]), simd.LoadFloat32s(c.minY[j:])
 				maxX, maxY := simd.LoadFloat32s(c.maxX[j:]), simd.LoadFloat32s(c.maxY[j:])
 				in := minX.LessEqual(ax2).And(maxX.GreaterEqual(ax1)).

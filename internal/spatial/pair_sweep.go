@@ -13,8 +13,7 @@ import (
 // Its buffers are kept between calls.
 type pairSweep struct {
 	pieces []sweepPiece
-	starts []uint32 // per cell, where its entries begin; one past the end closes the last
-	cursor []uint32
+	spans  spans
 	cells  []sweepEntry
 	seam   []seamPair
 	cols   sweepCols // a crowded cell's boxes, laid out for the wide sweep
@@ -84,14 +83,7 @@ func (s *pairSweep) begin() {
 	if s.onImage == nil {
 		s.onImage = s.addImage
 	}
-	cells := int(s.side) * int(s.side)
-	if cap(s.starts) < cells+1 {
-		s.starts = make([]uint32, cells+1)
-		s.cursor = make([]uint32, cells)
-	}
-	s.starts = s.starts[:cells+1]
-	s.cursor = s.cursor[:cells]
-	clear(s.starts)
+	s.spans.reset(int(s.side) * int(s.side))
 }
 
 func (s *pairSweep) addImage(_ plane.FragPosition, image geom.AABB) bool {
@@ -107,7 +99,7 @@ func (s *pairSweep) add(box geom.AABB, at int32, multi bool) {
 	}
 	for y := p.y1; y <= p.y2; y++ {
 		for x := p.x1; x <= p.x2; x++ {
-			s.starts[y*s.side+x+1]++
+			s.spans.count(y*s.side + x)
 		}
 	}
 	s.pieces = append(s.pieces, p)
@@ -123,54 +115,61 @@ func (s *pairSweep) cellOf(v float32) uint32 {
 
 // sort turns the per-cell counts into offsets and deals the pieces out in listing order.
 func (s *pairSweep) sort() {
-	for i := 1; i < len(s.starts); i++ {
-		s.starts[i] += s.starts[i-1]
-	}
-	copy(s.cursor, s.starts)
-
-	total := int(s.starts[len(s.starts)-1])
+	total := s.spans.place()
 	if cap(s.cells) < total {
 		s.cells = make([]sweepEntry, total)
 	}
 	s.cells = s.cells[:total]
-	for i := range s.pieces {
+	for i := len(s.pieces) - 1; i >= 0; i-- {
 		p := &s.pieces[i]
 		for y := p.y1; y <= p.y2; y++ {
 			for x := p.x1; x <= p.x2; x++ {
-				cell := y*s.side + x
-				s.cells[s.cursor[cell]] = p.sweepEntry
-				s.cursor[cell]++
+				s.cells[s.spans.take(y*s.side+x)] = p.sweepEntry
 			}
 		}
 	}
 }
 
-// visit tests every two entries of every cell, each pair spoken for by one cell only.
+// visit tests every two entries of every cell, in the order of the cells, each pair spoken for
+// by one cell only.
 func (s *pairSweep) visit(fn func(a, b int32)) {
 	s.seam = s.seam[:0]
-	for cell := range s.cursor {
-		entries := s.cells[s.starts[cell]:s.starts[cell+1]]
-		if len(entries) < 2 {
-			continue
-		}
-		cx, cy := uint32(cell)%s.side, uint32(cell)/s.side
-		if wide && len(entries) >= wideFrom {
-			s.visitWide(entries, cx, cy, fn)
-			continue
-		}
-		for i := range entries {
-			a := &entries[i]
-			for j := i + 1; j < len(entries); j++ {
-				b := &entries[j]
-				if !a.box.Intersects(b.box) || a.at == b.at {
-					continue
-				}
-				if s.cellOf(max(a.box.TopLeft.X, b.box.TopLeft.X)) != cx ||
-					s.cellOf(max(a.box.TopLeft.Y, b.box.TopLeft.Y)) != cy {
-					continue
-				}
-				s.meet(a, b, fn)
+	if s.spans.listed {
+		for _, cell := range s.spans.touched {
+			if s.spans.of[cell].n >= 2 {
+				s.visitCell(cell, fn)
 			}
+		}
+		return
+	}
+	for cell := range s.spans.of {
+		if s.spans.of[cell].n >= 2 {
+			s.visitCell(uint32(cell), fn)
+		}
+	}
+}
+
+// visitCell tests every two entries of a cell holding two or more.
+func (s *pairSweep) visitCell(cell uint32, fn func(a, b int32)) {
+	from, to := s.spans.entries(cell)
+	entries := s.cells[from:to]
+	cx, cy := cell%s.side, cell/s.side
+	if wide && len(entries) >= wideFrom {
+		s.visitWide(entries, cx, cy, fn)
+		return
+	}
+	for i := range entries {
+		a := &entries[i]
+		for j := i + 1; j < len(entries); j++ {
+			b := &entries[j]
+			if !a.box.Intersects(b.box) || a.at == b.at {
+				continue
+			}
+			if s.cellOf(max(a.box.TopLeft.X, b.box.TopLeft.X)) != cx ||
+				s.cellOf(max(a.box.TopLeft.Y, b.box.TopLeft.Y)) != cy {
+				continue
+			}
+			s.meet(a, b, fn)
 		}
 	}
 }

@@ -22,11 +22,14 @@ func (g *Grid) QueryCone(
 		return 0
 	}
 	g.Ready()
+	if wide && g.colsBehind.Load() {
+		g.colsUp()
+	}
+	if listed, ok := g.spans.listedIn(q.x1, q.y1, q.x2, q.y2, g.side); ok {
+		return g.walkConeListed(&q, listed, want, fn)
+	}
 	if !wide {
 		return g.walkCone(&q, want, fn)
-	}
-	if g.colsBehind.Load() {
-		g.colsUp()
 	}
 	return g.walkConeWide(&q, want, fn)
 }
@@ -176,8 +179,8 @@ func (g *Grid) walkCone(q *coneQuery, want Capability, fn func(uid.UID64)) int {
 		ownY := g.ownedFrom(y, q.y1)
 		for x := q.x1; x <= q.x2; x++ {
 			ownX := g.ownedFrom(x, q.x1)
-			cell := y*g.side + x
-			for k := g.starts[cell]; k < g.starts[cell+1]; k++ {
+			from, to := g.spans.entries(y*g.side + x)
+			for k := from; k < to; k++ {
 				c := &g.cells[k]
 				if !c.caps.matches(want) || !(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) ||
 					!q.holds(&c.box) {
@@ -186,6 +189,32 @@ func (g *Grid) walkCone(q *coneQuery, want Capability, fn func(uid.UID64)) int {
 				fn(c.id)
 				found++
 			}
+		}
+	}
+	return found
+}
+
+// walkConeListed is walkCone over the listed cells under q alone: few pieces, so one at a time
+// in every build, which keeps what the wide walk keeps.
+func (g *Grid) walkConeListed(
+	q *coneQuery, listed []uint32, want Capability, fn func(uid.UID64),
+) int {
+	found := 0
+	for _, cell := range listed {
+		x, y := cell%g.side, cell/g.side
+		if x < q.x1 || x > q.x2 {
+			continue
+		}
+		ownX, ownY := g.ownedFrom(x, q.x1), g.ownedFrom(y, q.y1)
+		from, to := g.spans.entries(cell)
+		for k := from; k < to; k++ {
+			c := &g.cells[k]
+			if !c.caps.matches(want) || !(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) ||
+				!q.holds(&c.box) {
+				continue
+			}
+			fn(c.id)
+			found++
 		}
 	}
 	return found
