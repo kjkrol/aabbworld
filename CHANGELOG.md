@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+**Still layer**
+- `Space.RebuildStill(runs, items)` hands the Space the boxes that stand until the next
+  `RebuildStill` (trees, houses, a wall as an entity), held as `RebuildRuns` holds its own, read
+  where they lie, but indexed once and kept across every `Rebuild` and `RebuildRuns`, which then
+  speak of the boxes that move alone and leave the still ones as they are. `Query`, `QueryCone`
+  and `Scan` see both; a collision engine pairs a still box with the moving ones, never with
+  another still one, and never pushes it, whatever its `Capability` (a still `Sensor` is touched
+  and pushes nothing), so a moving box is pushed the whole way out of it. The edge rules are the
+  same for both. An entity is still or moving, never both; `RebuildStill(nil, nil)` empties the
+  layer, and a Space never given one behaves as before. Over gram's Madeira (31,000 standing
+  trees and houses, 50 walking units, 64-unit buckets over 20,480×10,240; `Benchmark_Still_*`):
+  `RebuildRuns` with the first `Query` of a view 2.01 ms → 16 µs, a collision tick 1.27 ms →
+  5.3 µs, the view's `Query` 12.1 → 13.5 µs (two grids asked).
+
+**Sparse cells**
+- The query cells and the pair sweep clear, lay out, visit and ask only the cells their pieces
+  fill while those are no more than one cell in 64, listed as they are met and sorted; a `Query`
+  or a cone over more cells than are listed walks the listed ones inside it. A grid of 512² cells
+  holding 50 boxes costs those boxes' cells, not 262,144: a rebuild and its first query 449 →
+  3.0 µs, a collision tick 812 → 4.1 µs. The same pairs, in the same order, and the same answers
+  as walking every cell; a crowd filling its grid is walked cell by cell as before.
+- Query and the plain pair sweep test a cell's claim on a piece or a pair by the cell's first
+  edge, as the wide sweep does, in place of working the corner's cell out: `Grid_RebuildPairsQuery`
+  of mixed sizes 7.78 → 6.58 ms, `Collide_Ground` 3–9% and `BroadPhase` ticks 3.5–4.6% faster in
+  the plain build, the 256-bucket crowd 1.5–2.9% slower; sight as it was.
+
 ## v1.20.0 — 2026-11-09
 
 **SIMD**

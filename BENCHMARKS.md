@@ -402,6 +402,72 @@ Runs drop the copy and the id map, not the work: indexing reads the 72-byte reco
 benchmarks, through the old entry, are within 1–3% of v1.13.0 by their minima (a box read
 through the entry's pointer); their medians drift more under the machine's noise.
 
+## Still layer and sparse cells — v1.20.0
+
+`Benchmark_Still_*` is gram's Madeira: 31,000 trees 20×20 and houses 40×40 standing over a world of
+20,480×10,240 with 64-unit buckets (a grid of 512² cells), one in eight a house that collides
+(`CanCollide|Static`), and 50 units 10×10 walking among them; every record in runs of 128, as goke
+chunks. `none` is the 50 units alone; `moving` hands the standing records to `RebuildRuns` with the
+units, as v1.19.0 must; `still` hands them to `RebuildStill` once. The v1.19.0 tree and this one,
+alternately on an idle machine, `-cpu 1`, median of 6, 2026-11-08, plain build (the SIMD build
+within 1–3% of it on these rows).
+
+| Benchmark | layer | v1.19.0 | v1.20.0 |
+|:---|:---|---:|---:|
+| `RebuildRuns` + the first `Query` of a 2,560×1,440 view | none | 449 µs | **3.0 µs** |
+| | moving | 2.01 ms | 1.77 ms |
+| | still | — | **16.2 µs** |
+| `Query` of the view over built cells (822 pieces) | none | 2.61 µs | 0.80 µs |
+| | moving | 12.1 µs | 12.8 µs |
+| | still | — | 13.5 µs |
+| collision `Tick` after the units walk a step | none | 812 µs | **4.1 µs** |
+| | moving | 1.27 ms | 847 µs |
+| | still | — | **5.3 µs** |
+
+A standing box costs nothing a step and an empty cell nothing a tick: a rebuild and its first query
+1.77 ms → 16 µs, a tick 0.85 ms → 5.3 µs, where the moving layer holds the units alone. The tick
+over everything in one layer also pairs the overlapping houses with each other (some 320 contacts
+a tick, every one between two Static boxes); still boxes are never paired. A query asks two grids,
+the view's cells walked twice: +1.4 µs over one.
+
+The rest of the suite, the same runs:
+
+| Scene | build | v1.19.0 | v1.20.0 | change |
+|:---|:---|---:|---:|:---|
+| `BroadPhase` tick, 8,388 boxes 10×10 covering 20%, bucket 32 | plain | 1.66 ms | 1.59 ms | 4.5% faster |
+| `BroadPhase` tick, 16,777 boxes covering 40% | plain | 5.54 ms | 5.29 ms | 4.6% faster |
+| `BroadPhase` tick, 33,554 boxes 5×5, bucket 16 | plain | 7.18 ms | 6.93 ms | 3.5% faster |
+| `BroadPhase` tick, 12,000 boxes 8×8 plus 20 boxes 100×100, bucket 256 | plain | 7.19 ms | 7.39 ms | 2.9% slower |
+| | simd | 2.28 ms | 2.31 ms | 1.5% slower |
+| `BroadPhase` probe-per-entity, the four scenes | plain | | | 0.6–5.1% faster |
+| `Grid_RebuildPairsQuery`, 8,388 boxes of mixed sizes | plain | 7.78 ms | 6.58 ms | 15% faster |
+| `Grid_RebuildPairsQuery`, 2,000 and 8,388 boxes 5×5 | plain | | | 4–5% faster |
+| `Column_RebuildQueryTick`, spread of 5,000 with a tick | plain | 1.07 ms | 0.96 ms | 10% faster |
+| `Column_RebuildQueryTick`, the other scenes | plain | | | 1–3% faster |
+| `Collide_Ground`, the four grounds | plain | | | 3–9% faster |
+| `View_Visible`, `View_Seam`, `View_Tick`, `View_Cover` | plain, simd | | | within ±1.3% |
+| `BroadPhase`, `Grid_RebuildPairsQuery` | simd | | | within ±1.8%, but the crowd above |
+
+What the work taught us:
+
+* **A cell list pays only sorted.** The cells a layout fills are listed as they are met and sorted
+  before they are laid out, while they are no more than one in 64: sorting 4,096 of them costs a
+  third of walking 262,144. Left unsorted, the query cells of 31,000 boxes lay scattered and a view's
+  query was 40% slower; sorted, it walks them in the order of the cells, and the sweep visits them in
+  the order the full walk did, so the pairs come out the same, in the same order.
+* **A query of a sparse layer walks its list.** Where a rectangle holds more cells than the layer
+  lists, the query takes the listed cells inside it, by a binary search for its first and last, in
+  the order it would walk them: a view over the 50 units costs 0.8 µs instead of 2.6.
+* **The cell's claim by its first edge.** Query and the plain sweep worked out the cell of the
+  overlap's top-left corner for every candidate; as both lie in the cell already, one comparison an
+  axis with the cell's first edge says the same (the wide sweep had always done so). The compiler had
+  kept a zero for that conversion live across the loop, and rematerialised it on every skipped
+  candidate once the walk changed shape: 2–9% on the dense scenes, won back and more by the edge.
+* **The still boxes' pairs from a layout made once.** The still layer lays its colliding boxes out,
+  grown by the reach, once per `RebuildStill` and reach; each tick every moving piece reads the still
+  cells it covers. A still box a pair meets joins the tick's batch as a Static one, so the solver,
+  the field and the reports are untouched, and a tick holds the still boxes it met, not all of them.
+
 ## Key takeaways
 
 * **`Rebuild` is lazy, and that is free.** It records the slice and the id map and leaves cell
@@ -417,6 +483,9 @@ through the entry's pointer); their medians drift more under the machine's noise
 * **Pairs are reported by position, not id.** The engine used to look each pair's two ids up in the
   grid; reporting positions in the item slice removed that and shrank a sweep entry from 48 to 40
   bytes, for a 2–18% faster collision tick across the broad-phase scenes.
+* **What stands is indexed once.** Boxes that never move belong in `RebuildStill`: a step then
+  costs what moves, and a grid sized for every box costs the cells the moving ones fill; see
+  [Still layer and sparse cells](#still-layer-and-sparse-cells--v1200).
 * **Zero allocations on the tick.** Rebuild, Pairs, Solve, Query and Scan all report 0 allocs/op once
   their buffers have grown to the scene.
 * **SIMD pays where the tests are many to a cell.** Eight boxes at a time tick the crowd in a third
