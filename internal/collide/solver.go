@@ -68,6 +68,17 @@ func (s *Solver) Reset(items int) {
 	s.fieldMoved = s.fieldMoved[:0]
 }
 
+// Fit widens the batch to items entries, for entries added since Reset.
+func (s *Solver) Fit(items int) {
+	held := len(s.movedAt)
+	if items <= held {
+		return
+	}
+	s.movedAt = slices.Grow(s.movedAt, items-held)[:items]
+	clear(s.movedAt[held:])
+	s.items = items
+}
+
 // readyField clears the field's state for the batch, the first time a solve meets the ground.
 func (s *Solver) readyField() {
 	if s.fieldReady {

@@ -17,6 +17,17 @@ func (g *Grid) QueryCone(
 	area geom.AABB, origin, dir geom.Vec, halfAngle, radius float32, want Capability,
 	fn func(uid.UID64),
 ) int {
+	found := g.queryCone(area, origin, dir, halfAngle, radius, want, fn)
+	if still, ok := g.standing(); ok {
+		found += still.queryCone(area, origin, dir, halfAngle, radius, want, fn)
+	}
+	return found
+}
+
+func (g *Grid) queryCone(
+	area geom.AABB, origin, dir geom.Vec, halfAngle, radius float32, want Capability,
+	fn func(uid.UID64),
+) int {
 	q, ok := g.newConeQuery(area, origin, dir, halfAngle, radius)
 	if !ok {
 		return 0

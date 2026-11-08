@@ -187,6 +187,32 @@ func (s *pairSweep) meet(a, b *sweepEntry, fn func(a, b int32)) {
 	fn(lo, hi)
 }
 
+// cross takes every entry of s touching an entry of still, in the cell that owns where they
+// meet, still's positions counted on from offset past all of s's; the two lay out the same cells.
+func (s *pairSweep) cross(still *pairSweep, offset int32, fn func(a, b int32)) {
+	for i := range s.pieces {
+		p := &s.pieces[i]
+		for y := p.y1; y <= p.y2; y++ {
+			for x := p.x1; x <= p.x2; x++ {
+				from, to := still.spans.entries(y*s.side + x)
+				for k := from; k < to; k++ {
+					b := &still.cells[k]
+					if !p.box.Intersects(b.box) ||
+						s.cellOf(max(p.box.TopLeft.X, b.box.TopLeft.X)) != x ||
+						s.cellOf(max(p.box.TopLeft.Y, b.box.TopLeft.Y)) != y {
+						continue
+					}
+					if p.multi || b.multi {
+						s.seam = append(s.seam, seamPair{p.at, b.at + offset})
+						continue
+					}
+					fn(p.at, b.at+offset)
+				}
+			}
+		}
+	}
+}
+
 // flushSeam reports the pairs met through a wrapped image, each once.
 func (s *pairSweep) flushSeam(fn func(a, b int32)) {
 	if len(s.seam) == 0 {

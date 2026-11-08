@@ -29,10 +29,21 @@
 // The two layouts are kept apart on purpose — each holds only what its reader needs, and one shared
 // layout was measured to cost more than it saves (see BENCHMARKS.md).
 //
-// Both layouts are counting sorts into cells: count the pieces per cell, prefix-sum the counts into
-// offsets, deal the pieces out. A box straddling a wrapping seam is listed once per piece, and a
-// query or a pair met through more than one piece is reported once, by the cell that owns the
-// top-left corner of the overlap.
+// Both layouts are counting sorts into cells: count the pieces per cell, lay the cells out one
+// after another, deal the pieces out. While no more than one cell in 64 holds anything, the cells
+// holding something are listed and sorted, so a few pieces over a large grid cost their own cells
+// alone, to build, to visit and to ask; past that every cell is walked. A box straddling a wrapping
+// seam is listed once per piece, and a query or a pair met through more than one piece is reported
+// once, by the cell that owns the top-left corner of the overlap.
+//
+// # Still layer
+//
+// [Grid.RebuildStill] gives a grid a second layer, of records that stand until the next
+// RebuildStill: a grid of the same cells, indexed at the first question after it and kept across
+// every Rebuild. Query, QueryCone, Item and EntryAABB answer from both; [Grid.StillItems] lists the
+// still ones. [Grid.Pairs] pairs every moving item with the still ones it touches, from a layout of
+// theirs made once per RebuildStill and reach, and never two still ones; a still item's position
+// is counted on past the Items.
 //
 // # Resolution
 //

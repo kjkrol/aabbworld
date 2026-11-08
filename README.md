@@ -39,7 +39,8 @@ the simulation stores its entities. It is built around a few principles:
   none.
 - **No hidden costs.** `Rebuild` records the slice and defers indexing to the first query that
   needs it; several rebuilds in a tick cost one indexing. Boxes are read as they are now, so a
-  collision tick needs no second rebuild for queries to see its pushes.
+  collision tick needs no second rebuild for queries to see its pushes. Boxes that stand for good
+  are handed over apart (`RebuildStill`) and indexed once, so a tick costs what moves.
 - **Zero-allocation hot paths.** Rebuilding, pairing, solving, querying and scanning reuse their
   buffers; a steady tick allocates nothing.
 - **Edge rules are the plane's business.** Wrapping, clamping and leaving are applied by the
@@ -69,7 +70,7 @@ same results (see [Performance](#performance)); `aabbworld.SIMD()` reports wheth
 | **Plane-aware boxes** | `plane.AABB` keeps its size and how far it runs past a wrapping seam; its wrapped pieces follow (`VisitFragments`, `DeepestOverlapWith`) |
 | **Edge rules** | Per axis: stop whole, wrap (`WrapX`, `WrapY`, `Torus`) or open (`OpenX`, `OpenY`, boxes may leave) |
 | **Transformations** | `Place`, `Move`, `MoveTo`, `WrapAABB` fold a box into the space under its edge rules and say when it has left |
-| **Spatial index** | `Rebuild` from a slice, `Query` by rectangle and `Capability` mask, seams included |
+| **Spatial index** | `Rebuild` from a slice, `Query` by rectangle and `Capability` mask, seams included; `RebuildStill` holds what stands apart, indexed once and never paired with itself |
 | **Collisions** | `CollideEngine`: pairs every two `CanCollide` boxes within reach, asks your `Handler` to confirm each overlap, separates them over a few passes, reports who moved and who left; `Config.Field` pushes boxes out of the solid ground of a grid through its open sides only, and out of walls at any angle (`WallField`) square to them |
 | **Sight** | `Scan` fills a `View` with what an observer sees through a `Cone`: entities nearest first, depth samples, or the lit outline; `Cone.Transparency` lets a forest shorten sight where a wall cuts it; `Cone.Eye`, `Elevation` and `Ground` give sight heights, so a hawk looks over the wall and a hill hides the plain behind it, and `Cone.Profile` reads a faceted ground along each ray exactly, a few points a cell; `View.Shadows` lists the ground out of sight, holes in a view drawn to its full reach; `Cone.Cover` walks the walls and forests of a grid cell by cell along each ray instead of holding them as entities |
 
@@ -157,7 +158,9 @@ in the top-left quarter: [1 2]
 1. **Move** the boxes with `Space.Move` (or `MoveTo`); the edge rules are applied to each.
 2. **Rebuild** with the items as they now stand, or **RebuildRuns** with runs over the caller's
    columns. This is the one stamp a `Space` needs: it records the slice, or the runs, and indexes
-   lazily.
+   lazily. What stands for good — trees, houses — goes to **RebuildStill** instead, once, and is
+   kept across every Rebuild: queries see it, the engine pairs it with the moving boxes alone and
+   never pushes it.
 3. **Tick** the engine. Every two `CanCollide` boxes within `Reach` of each other are paired; each
    overlapping pair is put to `Handler.Touch`, which may confirm it, refine the penetration, or veto
    it; confirmed pairs are separated over up to `Iterations` passes and reported by `Contact`; every
