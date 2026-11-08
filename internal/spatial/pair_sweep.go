@@ -2,6 +2,7 @@ package spatial
 
 import (
 	"cmp"
+	"math"
 	"slices"
 
 	"github.com/kjkrol/aabbworld/geom"
@@ -105,6 +106,14 @@ func (s *pairSweep) add(box geom.AABB, at int32, multi bool) {
 	s.pieces = append(s.pieces, p)
 }
 
+// edge is where column or row n begins as cellOf counts, the first running on from minus infinity.
+func (s *pairSweep) edge(n uint32) float32 {
+	if n == 0 {
+		return float32(math.Inf(-1))
+	}
+	return float32(uint64(n) << s.shift)
+}
+
 // cellOf is the column or row holding v, held inside the grid.
 func (s *pairSweep) cellOf(v float32) uint32 {
 	if !(v >= 0) {
@@ -158,15 +167,15 @@ func (s *pairSweep) visitCell(cell uint32, fn func(a, b int32)) {
 		s.visitWide(entries, cx, cy, fn)
 		return
 	}
+	// Both entries reach this cell, so the overlap's top-left corner lies in it or before it.
+	ownX, ownY := s.edge(cx), s.edge(cy)
 	for i := range entries {
 		a := &entries[i]
 		for j := i + 1; j < len(entries); j++ {
 			b := &entries[j]
-			if !a.box.Intersects(b.box) || a.at == b.at {
-				continue
-			}
-			if s.cellOf(max(a.box.TopLeft.X, b.box.TopLeft.X)) != cx ||
-				s.cellOf(max(a.box.TopLeft.Y, b.box.TopLeft.Y)) != cy {
+			if !a.box.Intersects(b.box) || a.at == b.at ||
+				!(max(a.box.TopLeft.X, b.box.TopLeft.X) >= ownX &&
+					max(a.box.TopLeft.Y, b.box.TopLeft.Y) >= ownY) {
 				continue
 			}
 			s.meet(a, b, fn)
@@ -194,12 +203,13 @@ func (s *pairSweep) cross(still *pairSweep, offset int32, fn func(a, b int32)) {
 		p := &s.pieces[i]
 		for y := p.y1; y <= p.y2; y++ {
 			for x := p.x1; x <= p.x2; x++ {
+				ownX, ownY := s.edge(x), s.edge(y)
 				from, to := still.spans.entries(y*s.side + x)
 				for k := from; k < to; k++ {
 					b := &still.cells[k]
 					if !p.box.Intersects(b.box) ||
-						s.cellOf(max(p.box.TopLeft.X, b.box.TopLeft.X)) != x ||
-						s.cellOf(max(p.box.TopLeft.Y, b.box.TopLeft.Y)) != y {
+						!(max(p.box.TopLeft.X, b.box.TopLeft.X) >= ownX &&
+							max(p.box.TopLeft.Y, b.box.TopLeft.Y) >= ownY) {
 						continue
 					}
 					if p.multi || b.multi {

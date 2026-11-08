@@ -3,7 +3,6 @@
 package spatial
 
 import (
-	"math"
 	"simd"
 	"slices"
 
@@ -86,12 +85,4 @@ func (c *cellCols) fill(cells []gridCell) {
 		minX[i], minY[i] = b.TopLeft.X, b.TopLeft.Y
 		maxX[i], maxY[i] = b.BottomRight.X, b.BottomRight.Y
 	}
-}
-
-// edge is where column or row n begins as cellOf counts, the first running on from minus infinity.
-func (s *pairSweep) edge(n uint32) float32 {
-	if n == 0 {
-		return float32(math.Inf(-1))
-	}
-	return float32(uint64(n) << s.shift)
 }

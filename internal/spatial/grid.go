@@ -389,8 +389,10 @@ func (g *Grid) query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	g.Ready()
 	x1, y1 := g.cellOf(area.TopLeft.X), g.cellOf(area.TopLeft.Y)
 	x2, y2 := g.cellOf(area.BottomRight.X), g.cellOf(area.BottomRight.Y)
-	if listed, ok := g.spans.listedIn(x1, y1, x2, y2, g.side); ok {
-		return g.queryListed(listed, area, x1, y1, x2, want, fn)
+	if g.spans.listed {
+		if listed, ok := g.spans.listedIn(x1, y1, x2, y2, g.side); ok {
+			return g.queryListed(listed, area, x1, y1, x2, want, fn)
+		}
 	}
 	if wideQuery && len(g.cells) >= queryWideFrom*lanes32()*g.spans.occupied {
 		if g.colsBehind.Load() {
@@ -400,13 +402,13 @@ func (g *Grid) query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	}
 	found := 0
 	for y := y1; y <= y2; y++ {
+		ownY := g.ownedFrom(y, y1)
 		for x := x1; x <= x2; x++ {
+			ownX := g.ownedFrom(x, x1)
 			from, to := g.spans.entries(y*g.side + x)
 			for _, c := range g.cells[from:to] {
-				if !c.caps.matches(want) || !area.Intersects(c.box) {
-					continue
-				}
-				if max(g.cellOf(c.box.TopLeft.X), x1) != x || max(g.cellOf(c.box.TopLeft.Y), y1) != y {
+				if !c.caps.matches(want) || !area.Intersects(c.box) ||
+					!(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) {
 					continue
 				}
 				fn(c.id)
@@ -427,12 +429,11 @@ func (g *Grid) queryListed(
 		if x < x1 || x > x2 {
 			continue
 		}
+		ownX, ownY := g.ownedFrom(x, x1), g.ownedFrom(y, y1)
 		from, to := g.spans.entries(cell)
 		for _, c := range g.cells[from:to] {
-			if !c.caps.matches(want) || !area.Intersects(c.box) {
-				continue
-			}
-			if max(g.cellOf(c.box.TopLeft.X), x1) != x || max(g.cellOf(c.box.TopLeft.Y), y1) != y {
+			if !c.caps.matches(want) || !area.Intersects(c.box) ||
+				!(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) {
 				continue
 			}
 			fn(c.id)

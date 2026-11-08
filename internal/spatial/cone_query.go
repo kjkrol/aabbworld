@@ -36,8 +36,10 @@ func (g *Grid) queryCone(
 	if wide && g.colsBehind.Load() {
 		g.colsUp()
 	}
-	if listed, ok := g.spans.listedIn(q.x1, q.y1, q.x2, q.y2, g.side); ok {
-		return g.walkConeListed(&q, listed, want, fn)
+	if g.spans.listed {
+		if listed, ok := g.spans.listedIn(q.x1, q.y1, q.x2, q.y2, g.side); ok {
+			return g.walkConeListed(&q, listed, want, fn)
+		}
 	}
 	if !wide {
 		return g.walkCone(&q, want, fn)
@@ -231,9 +233,9 @@ func (g *Grid) walkConeListed(
 	return found
 }
 
-// ownedFrom is where a piece in column or row n of the walk must begin for that cell to own it, as
-// Query's cellOf test says: a piece in a cell begins in it or before it, so anywhere on the first
-// column or row walked and past the cell's first edge on the rest.
+// ownedFrom is where a piece in column or row n of the walk must begin for that cell to own it: a
+// piece in a cell begins in it or before it, so anywhere on the first column or row walked and
+// past the cell's first edge on the rest.
 func (g *Grid) ownedFrom(n, first uint32) float32 {
 	if n == first {
 		return float32(math.Inf(-1))
