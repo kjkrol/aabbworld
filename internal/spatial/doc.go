@@ -20,8 +20,8 @@
 // [Grid.Item] and [Grid.EntryAABB] answer by id from it, mapping the ids at the first call too.
 // [Grid.QueryCone] answers the part of a cone inside an area: the pieces within its radius and,
 // for a cone narrower than a half-turn, not wholly beyond either edge, in float32 with a slack, so
-// that nothing inside is missed; built with GOEXPERIMENT=simd on a CPU with AVX2 it reads columns
-// of the cells' edges eight pieces at a time, built with the cells once a cone has been asked.
+// that nothing inside is missed. Built with GOEXPERIMENT=simd, it and [Grid.Query] read columns of
+// the cells' edges a vector of pieces at a time, built with the cells once either has been asked.
 //
 // [Grid.Pairs] finds every two items sharing a capability whose boxes, grown by a reach of their
 // shorter side, touch. It does not read the cells: it sweeps its own counting-sorted layout of the

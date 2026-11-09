@@ -104,7 +104,7 @@ func walk(
 	if wide {
 		sc.slabs.lay(origin, coneDir, minGap, angles, events, cands)
 	}
-	lockstep := wide && elev != nil && elev.lat.f != nil && elev.lat.cellsX > 0
+	lockstep := wide && avx2 && elev != nil && elev.lat.f != nil && elev.lat.cellsX > 0
 	sc.block.reset()
 
 	for i, a := range angles {

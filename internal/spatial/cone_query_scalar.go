@@ -4,8 +4,5 @@ package spatial
 
 import "github.com/kjkrol/uid"
 
-type coneCols struct{}
-
-func (c *coneCols) fill([]gridCell) {}
-
-func (g *Grid) walkConeWide(*coneQuery, Capability, func(uid.UID64)) int { return 0 }
+// walkConeAVX2 walks nothing without the simd experiment on amd64: simd's kernel walks, if any.
+func (g *Grid) walkConeAVX2(*coneQuery, Capability, func(uid.UID64)) int { return 0 }

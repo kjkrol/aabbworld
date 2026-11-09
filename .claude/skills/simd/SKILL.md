@@ -1,6 +1,6 @@
 ---
 name: simd
-description: aabbworld's SIMD kernels, built with GOEXPERIMENT=simd on amd64 and run on AVX2 — the collision pair sweep eight boxes at a time, sight's cone query eight pieces at a time, its slabs four rays at a time and the heightfield walked four rays in lockstep: the gate and the file pattern, why each is as wide as it is, what stays scalar on purpose, the invariants (the same pairs and sightings to the bit) and the tests that hold them, how much each gives and how to measure it. Use when touching a *_simd.go file or its scalar twin, adding a kernel, chasing a difference between the SIMD and the plain build, or measuring either.
+description: aabbworld's SIMD kernels, built with GOEXPERIMENT=simd on amd64, arm64 or wasm — the collision pair sweep a vector of boxes at a time, Query's and sight's cone a vector of pieces at a time, the slabs a vector of rays at a time, written for AVX2 and again on the portable simd package, and the heightfield walked four rays in lockstep on AVX2: the gate and the file pattern, why each is as wide as it is, what stays scalar on purpose, the invariants (the same pairs and sightings to the bit) and the tests that hold them, how much each gives and how to measure it. Use when touching a *_simd.go, *_lanes.go or wide_*.go file or a scalar twin, adding a kernel, chasing a difference between the SIMD and the plain build, or measuring either.
 ---
 
 # simd
@@ -12,35 +12,57 @@ numbers and the method are `BENCHMARKS.md` ("Wide pair sweep", "Sight in SIMD", 
 
 ## The gate and the files
 
-- Build: `GOEXPERIMENT=simd` on amd64 (`simd/archsimd`). Run: `var wide = archsimd.X86.AVX2()`
-  (`internal/spatial/pair_sweep_simd.go`, `internal/raycast/slab_simd.go`): the masks are joined
-  on 256 bits and the broadcasts take AVX2; without it the plain path runs in the SIMD build
-  too. `aabbworld.SIMD()` (`simd.go`) reports `spatial.Wide()`.
-- A kernel is a file `*_simd.go` under `//go:build goexperiment.simd && amd64` with a twin under
-  `//go:build !(goexperiment.simd && amd64)` holding `const wide = false` (or a `walkWide` that
-  walks nothing), so the callers read one set of names: `slab_simd.go`/`slab_scalar.go`,
-  `heightfield_simd.go`/`heightfield_scalar.go`, `pair_sweep_simd.go`/`pair_sweep_scalar.go`;
-  the cone query's plain path is `cone_query.go` itself (`if !wide`). The fork is one `if wide`
-  at the caller: `sweep.go` (`walk`), `slab.go` (`fill`, `laid`), `pair_sweep.go`, `grid.go`
-  (the columns), `cone_query.go`.
-- `archsimd.ClearAVXUpperBits()` before every callback out of a kernel and at its exit (the SSE
-  code after it would pay the transition); `export_simd_test.go` opens `wide` to the tests, which
-  turn it off to compare the two paths on one scene.
+- Build: `GOEXPERIMENT=simd` on amd64, arm64 or wasm. Every kernel has two writings: one for AVX2
+  on `simd/archsimd`, amd64 only, and one on the portable `simd` package at whatever width it
+  runs (128 bits on Neon and wasm, 256 or 512 on amd64). `internal/simdx` holds what `simd`
+  lacks: a mask as a bitmask (`Bits32`, `Bits64`), the padding a slice loaded a vector at a time
+  needs (`Pad32`, `Pad64`, for 512 bits), `On` (simd in hardware), `ArchFirst` (AVX2, and simd
+  not emulated) and `Settle` (`ClearAVXUpperBits` on amd64, nothing elsewhere).
+- Run: in each package `wide_simd.go`, under `goexperiment.simd && (amd64 || arm64 || wasm)`,
+  holds the gates — `wide` (`simdx.On() || simdx.ArchFirst()`), `avx2` (`simdx.ArchFirst()`: on
+  amd64 the AVX2 kernels are as fast or faster than simd's at every width, and twice as wide
+  where simd holds a CPU without VPCLMULQDQ to 128 bits), `wideQuery` and `queryWideFrom` in
+  spatial — the columns, and the wrappers the callers name (`visitWide`, `walkConeWide`,
+  `queryWide`, `fillWide`, `invertWide`), each choosing `avx2`'s kernel or simd's. Its twin
+  `wide_scalar.go` holds `const wide = false` and wrappers that do nothing. `GODEBUG=simd=0`
+  makes `simdx.On` and `ArchFirst` false: no kernel runs. `aabbworld.SIMD()` reports
+  `spatial.Wide()`.
+- The AVX2 kernels are `*_simd.go` under `goexperiment.simd && amd64`, with twins `*_scalar.go`
+  that do nothing: `pair_sweep_simd.go` (`visitAVX2`), `cone_query_simd.go` (`walkConeAVX2`),
+  `slab_simd.go` (`fillAVX2`, `invertAVX2`), `heightfield_simd.go` (`walkWide`, AVX2 only). simd's
+  are `*_lanes.go` beside them (`visitLanes`, `walkConeLanes`, `queryLanes`, `fillLanes`,
+  `invertLanes`), needing no twin: only `wide_simd.go` calls them. The fork is one `if wide` at
+  the caller: `sweep.go` (`walk`, and the lockstep on `wide && avx2`), `slab.go` (`fill`,
+  `laid`), `pair_sweep.go`, `grid.go` (the columns, and `Query` on `wideQuery`),
+  `cone_query.go`.
+- `simdx.Settle()` before every callback out of a kernel and at its exit (the SSE code after it
+  would pay the transition); `export_wide_test.go` opens `wide` to the tests (`SetWide`) and runs
+  a check once for each kernel the CPU runs (`EachKernel`; spatial's `eachKernel`).
 
 ## The kernels
 
-- **The pair sweep** (`internal/spatial/pair_sweep_simd.go`, 2026-10-23): one box against the
-  next eight of a crowded cell (`wideFrom` 8 entries), `Float32x8`, the cell's edges in columns
+- **The pair sweep** (`internal/spatial/pair_sweep_simd.go`, 2026-10-23; `pair_sweep_lanes.go`):
+  one box against the next eight of a crowded cell (`wideFrom` 8 entries), `Float32x8`, or a
+  vector of `Float32s`, the cell's edges in columns
   filled per cell. Where the tests are many to a cell: `BroadPhase` 12,000 boxes 6.95 → 3.10 ms
   (−55%), `Grid_RebuildPairsQuery` −31%; sparse cells nothing.
-- **The cone query** (`internal/spatial/cone_query_simd.go`, the sight stage): the pieces of the
-  cells under the cone's rectangle tested eight at a time, `Float32x8` — the radius, the wedge
+- **The cone query** (`internal/spatial/cone_query_simd.go`, `cone_query_lanes.go`, the sight
+  stage): the pieces of the cells under the cone's rectangle tested eight at a time, `Float32x8`,
+  or a vector of `Float32s` — the radius, the wedge
   (a cone narrower than a half-turn), the owner cell — from columns of the cells' edges built
-  with the cells once a scan has been asked (`g.coned`; the plain build never pays for them).
+  with the cells once a scan or a wide query has been asked (`g.colsAsked`; the plain build
+  never pays for them).
   The gather was half a scan: `View_Visible` 1,000 entities 25.4 → 15.7 µs with the slabs; the
   plain build 26.1 → 16.8 from the tight filter alone.
-- **The slabs** (`internal/raycast/slab_simd.go`): between two events of a walk the active set
+- **The query** (`internal/spatial/grid_query_lanes.go`, simd's only, so never with AVX2: it
+  probed the crowd 3× slower than the plain test on an EPYC 7763, 4× faster on a 9V74): `Query` tests a cell's
+  pieces a vector at a time from the cone's columns, a cell of fewer than a vector a piece at a
+  time, and only while the occupied cells hold `queryWideFrom` vectors of pieces each on average
+  (`g.occupied`, counted as the cells are indexed): below that the plain test is as fast or
+  faster. The crowd probed per entity 12.3 → 4.4 ms on Neon.
+- **The slabs** (`internal/raycast/slab_simd.go`, `slab_lanes.go`): between two events of a walk the active set
   is fixed, so each active box's `near`/`far` is laid for four angles at a time, `Float64x4`,
+  or a vector of `Float64s`,
   into a scratch buffer `castFlat`/`castElevated` read; blocks under `minWide` (2) go as cast.
   With the query: `View_Visible`/`Both`/`Depths`/`Translucent` −33…37%.
 - **The heightfield in lockstep** (`internal/raycast/heightfield_simd.go`): the lattice walk four
@@ -63,11 +85,22 @@ scatter), every callback. A kernel over them would move the cost, not remove it.
 
 ## Invariants and the tests that hold them
 
+- Each check of a kernel runs once for every kernel the CPU runs (`eachKernel`, `EachKernel`): on
+  an AVX2 CPU the AVX2 one and simd's, on Neon simd's.
 - The pair sweep finds the same pairs in the same order as the plain sweep:
   `TestPairSweep_WideFindsWhatNarrowFinds`, `_WideAgreesOnEdgesAndNaN`,
   `_WideNeverPairsABoxWithItself`.
 - The cone query keeps what the plain filter keeps: `TestQueryCone_WideFindsWhatNarrowFinds`,
   `_WideAgreesOnEdgesAndNaN`, `_ColumnsFollowTheCells`, `_ManyGoroutinesAskAFreshGridAsOneDoes`.
+- Query reports what the plain Query reports, in the same order, and goes wide only over crowded
+  cells: `TestQuery_WideFindsWhatNarrowFinds`, `_WideAgreesOnEdgesAndNaN`,
+  `_ColumnsFollowTheCells`, `_WideOnlyOverCrowdedCells`, `_ManyGoroutinesAskAFreshGridAsOneDoes`,
+  `_ColumnsServeConesAndQueriesAlike`; with AVX2 it stays plain:
+  `_WideOnSimdsVectorsOnlyWithoutAVX2`. Through a Space, the seams' images go wide too:
+  `TestSpace_Query_FindsEveryBoxAcrossTheSeams` (a crowded torus against a brute force; its areas
+  keep off the world's last unit, which the grid holds to its edge).
+- `simdx.Bits32` and `Bits64` set one bit a lane, and the way through memory, wasm's, sets the
+  same: `TestBits_OneBitALane`, `_StoredAgreesWithTheMask`.
 - Every lane of a slab is `hitDistance`: `TestFillWide_EveryLaneIsHitDistance`,
   `TestInvertWide_IsOneOverEach`; the View benchmarks' scenes see exactly what they saw (an
   entity seen over less than the sweep resolves may differ once boxes out of reach add no
@@ -75,8 +108,11 @@ scatter), every callback. A kernel over them would move the cost, not remove it.
 - The lockstep walk records the plain walk's points to the bit:
   `TestHeights_RaysWalkedSideBySideRecordWhatEachWalksAlone` (random fields, fans of angles, the
   oracle `fieldOracle`); a scan over a field sees what one over its profile sees.
-- `make test-simd` runs the suite built wide, `make test` and CI run it plain. A change to a
-  kernel runs both, and the walk once under `GOAMD64=v3`.
+- `make test-simd` runs the suite built wide, `make test` plain, `make test-simd-128` built wide
+  with simd's vectors held to 128 bits (on AVX2, the width of a CPU without VPCLMULQDQ),
+  `make test-simd-emulated` built wide with no kernel running, and `make vet-simd` vets the build for amd64, arm64 and wasm; CI
+  (`.github/workflows/simd-amd64.yml`) runs them all on amd64. A change to a kernel runs them,
+  the walk once under `GOAMD64=v3`, and the suite on an arm64 machine.
 
 ## Measuring
 
@@ -98,8 +134,17 @@ with `compare.py`, and the fairness rules for the siblings.
   95–99%) before widening; a block shorter than the width is not worth the gate (`minWide`,
   `wideFrom`).
 - Columns built always cost the plain path (+7…10% once): build them where they pay and lazily
-  (`g.coned`, the crowded cell's `fill`).
+  (`g.colsAsked`, the crowded cell's `fill`).
 - `.Add(zero)` after `Max` turns a −0 into +0 as `math.Max` has it; without it a lane differs
   from the scalar on a ray along an axis.
 - The twin files keep every name the callers use (`wide`, `fillWide`, `walkWide`,
-  `invertWide`): the plain build is what CI compiles.
+  `invertWide`, `visitWide`, `walkConeWide`, `queryWide`): the plain build is what CI compiles.
+- A kernel over simd's vectors is a function, not a method: the compiler's rewrite of simd code
+  for each width fails on methods ("missing Types entry"). It has other crashes (a nil pointer
+  on a test holding its vectors among `t.Fatalf`s): keep vectors in small functions of their own.
+- simd's width is the CPU's: a slice loaded a vector at a time runs `simdx.Pad32` or `Pad64` past
+  its data, and a test that lays its own slices pads them so (an AVX-512 runner caught one at 3).
+- simd has no move-mask: `simdx.Bits32` is `VMOVMSKPS` through `ToArch` on amd64 and an AND with
+  the lane weights and `ADDV` on Neon; a hit loop takes `bits.TrailingZeros64` of it.
+- simd's kernels lost to the AVX2 ones at the same width (256 bits on an EPYC 9V74: the crowd's
+  tick +21%), so `avx2` picks the AVX2 kernels wherever AVX2 runs; measure both before moving it.

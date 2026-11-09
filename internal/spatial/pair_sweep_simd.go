@@ -3,34 +3,13 @@
 package spatial
 
 import (
-	"math"
 	"math/bits"
 	"simd/archsimd"
-	"slices"
 )
 
-// wide says crowded cells are swept eight entries at a time; tests turn it off to compare. The
-// masks are joined with VPAND on 256 bits, which takes AVX2.
-var wide = archsimd.X86.AVX2()
-
-// sweepCols is a cell's boxes one edge to a slice, so eight neighbours load at once. Each slice
-// runs seven past the cell, for loads that start near its end.
-type sweepCols struct{ minX, minY, maxX, maxY []float32 }
-
-func (c *sweepCols) fill(entries []sweepEntry) {
-	n := len(entries) + 7
-	c.minX, c.minY = slices.Grow(c.minX[:0], n)[:n], slices.Grow(c.minY[:0], n)[:n]
-	c.maxX, c.maxY = slices.Grow(c.maxX[:0], n)[:n], slices.Grow(c.maxY[:0], n)[:n]
-	for i := range entries {
-		b := &entries[i].box
-		c.minX[i], c.minY[i] = b.TopLeft.X, b.TopLeft.Y
-		c.maxX[i], c.maxY[i] = b.BottomRight.X, b.BottomRight.Y
-	}
-}
-
-// visitWide tests every two entries of one cell, entry i against eight of the rest at once, and
+// visitAVX2 tests every two entries of one cell, entry i against eight of the rest at once, and
 // takes the pairs this cell owns.
-func (s *pairSweep) visitWide(entries []sweepEntry, cx, cy uint32, fn func(a, b int32)) {
+func (s *pairSweep) visitAVX2(entries []sweepEntry, cx, cy uint32, fn func(a, b int32)) {
 	c := &s.cols
 	c.fill(entries)
 	n := len(entries)
@@ -67,12 +46,4 @@ func (s *pairSweep) visitWide(entries []sweepEntry, cx, cy uint32, fn func(a, b 
 		}
 	}
 	archsimd.ClearAVXUpperBits()
-}
-
-// edge is where column or row n begins as cellOf counts, the first running on from minus infinity.
-func (s *pairSweep) edge(n uint32) float32 {
-	if n == 0 {
-		return float32(math.Inf(-1))
-	}
-	return float32(uint64(n) << s.shift)
 }

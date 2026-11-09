@@ -5,30 +5,12 @@ package spatial
 import (
 	"math/bits"
 	"simd/archsimd"
-	"slices"
 
 	"github.com/kjkrol/uid"
 )
 
-// coneCols is the cells' boxes one edge to a slice, at the cells' positions, so eight pieces load
-// at once. Each slice runs seven past the cells, for loads that start near their end.
-type coneCols struct{ minX, minY, maxX, maxY []float32 }
-
-func (c *coneCols) fill(cells []gridCell) {
-	n := len(cells) + 7
-	c.minX, c.minY = slices.Grow(c.minX[:0], n)[:n], slices.Grow(c.minY[:0], n)[:n]
-	c.maxX, c.maxY = slices.Grow(c.maxX[:0], n)[:n], slices.Grow(c.maxY[:0], n)[:n]
-	minX, minY := c.minX[:len(cells)], c.minY[:len(cells)]
-	maxX, maxY := c.maxX[:len(cells)], c.maxY[:len(cells)]
-	for i := range cells {
-		b := &cells[i].box
-		minX[i], minY[i] = b.TopLeft.X, b.TopLeft.Y
-		maxX[i], maxY[i] = b.BottomRight.X, b.BottomRight.Y
-	}
-}
-
-// walkConeWide tests the pieces of the cells under q eight at a time, each as holds tests one.
-func (g *Grid) walkConeWide(q *coneQuery, want Capability, fn func(uid.UID64)) int {
+// walkConeAVX2 tests the pieces of the cells under q eight at a time, each as holds tests one.
+func (g *Grid) walkConeAVX2(q *coneQuery, want Capability, fn func(uid.UID64)) int {
 	c := &g.cols
 	edges := [4][]float32{c.minX, c.minY, c.maxX, c.maxY}
 	loX, loY := edges[q.edges[0].xi], edges[q.edges[0].yi]

@@ -83,9 +83,10 @@ type Grid struct {
 	cells  []gridCell
 	sweep  pairSweep
 
-	cols       coneCols    // the cells' boxes as QueryCone loads them, eight at a time
-	coned      bool        // a cone was asked, so the cells are built with their columns
+	cols       cellCols    // the cells' boxes as QueryCone and Query load them, a vector at a time
+	colsAsked  bool        // a cone or a wide query was asked: the cells are built with their columns
 	colsBehind atomic.Bool // the columns are behind the cells
+	occupied   int         // the cells holding a piece or more
 
 	listingID   uid.UID64
 	listingCaps Capability
@@ -221,9 +222,16 @@ func (g *Grid) index() {
 		}
 	}
 
-	for i := 1; i < len(g.starts); i++ {
-		g.starts[i] += g.starts[i-1]
+	occupied := 0
+	for i := range g.starts {
+		if g.starts[i] != 0 {
+			occupied++
+		}
+		if i > 0 {
+			g.starts[i] += g.starts[i-1]
+		}
 	}
+	g.occupied = occupied
 	copy(g.cursor, g.starts)
 	total := int(g.starts[cells])
 	if cap(g.cells) < total {
@@ -240,10 +248,11 @@ func (g *Grid) index() {
 			}
 		}
 	}
-	if wide && g.coned {
+	cols := (wide || wideQuery) && g.colsAsked
+	if cols {
 		g.cols.fill(g.cells)
 	}
-	g.colsBehind.Store(!wide || !g.coned)
+	g.colsBehind.Store(!cols)
 }
 
 func (g *Grid) addImage(_ plane.FragPosition, image geom.AABB) bool {
@@ -346,6 +355,12 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	g.Ready()
 	x1, y1 := g.cellOf(area.TopLeft.X), g.cellOf(area.TopLeft.Y)
 	x2, y2 := g.cellOf(area.BottomRight.X), g.cellOf(area.BottomRight.Y)
+	if wideQuery && len(g.cells) >= queryWideFrom*lanes32()*g.occupied {
+		if g.colsBehind.Load() {
+			g.colsUp()
+		}
+		return g.queryWide(area, x1, y1, x2, y2, want, fn)
+	}
 	found := 0
 	for y := y1; y <= y2; y++ {
 		for x := x1; x <= x2; x++ {

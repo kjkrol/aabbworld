@@ -175,6 +175,58 @@ benchmark where it is not zero, by up to 38%. What the work taught us:
   on a plane, 7–9.5% over a raster ground. Folding a point just below zero pays a test more, so it
   never lands on the far edge.
 
+## simd's vectors — arm64, wasm and `Query`
+
+Built with `GOEXPERIMENT=simd`, the sweep, the cone and the slabs also run on the portable `simd`
+package, at whatever width the CPU gives, and `Query` tests a crowded grid's cells a vector of
+pieces at a time. On an **Apple M2 Pro** (macOS, Go 1.27.3, Neon, 128 bits: four float32 to a
+vector), the one binary run with `GODEBUG=simd=0` and without, alternately, the median of six
+runs, 2026-11-06:
+
+| Scene | `simd=0` | wide |
+|:---|---:|---:|
+| `BroadPhase` crowd, 12,000 boxes 8×8 plus 20 boxes 100×100, bucket 256: tick | 6.19 ms | **2.71 ms** (−56%) |
+| the same crowd, every entity probed (`Query`) | 12.3 ms | **4.45 ms** (−64%) |
+| `BroadPhase` 16,777 boxes 10×10 covering 40%, bucket 32: tick | 4.11 ms | **3.36 ms** (−18%) |
+| the same, every entity probed | 4.89 ms | **3.85 ms** (−21%) |
+| `BroadPhase` 8,388 boxes 10×10 covering 20%, and 33,554 5×5: tick and probes | | −5…+2% |
+| `Grid_RebuildPairsQuery`, 8,388 boxes of mixed sizes | 5.17 ms | **4.17 ms** (−19%) |
+| `View_Tick`, 10,000 entities / 1,000 | 2.73 ms / 116 µs | **2.08 ms** / **104 µs** |
+| `View_Visible`, 1,000 entities / 100 | 11.0 / 1.41 µs | **9.96** / 1.47 µs (+5%) |
+| `View_Both`, 1,000 entities / 100 | 12.3 / 1.98 µs | **11.3** / 2.06 µs (+4%) |
+| `Column_RebuildQueryTick` spread, no tick / with the tick | 136 / 601 µs | 147 / 677 µs (+8…13%) |
+| `Column_RebuildQueryTick` crowd, `Solver_Dense`, `View_Cover` | | −12…+3% |
+
+`BroadPhase` ticks, `Solver_Dense`, `Column_RebuildQueryTick` and `View_*` within 2% on an **AMD
+EPYC 7763** (Zen 3, AVX2 and VPCLMULQDQ: `simd` at 256 bits), `main` against this tree, both
+built with `GOEXPERIMENT=simd`, alternately, eight runs on one GitHub Actions runner — the AVX2
+kernels run there as before. `simd`'s `Query` does not: it probed the crowd in 51.0 ms against
+the plain 16.4 on that CPU, and in 4.4 against 19.3 on an EPYC 9V74 (Zen 4). With AVX2, `Query`
+stays plain until a kernel is measured on both.
+
+On the 7763 the AVX2 cone and slabs, as in v1.19.0, scan `View_Visible` with 100 entities in
+5.79 µs against 2.25 with `GODEBUG=simd=0`, and with 1,000 in 18.7 against 16.6; the crowd's
+tick, 2.38 against 7.98 ms, gains as on Intel.
+
+What the work taught us:
+
+* **simd's kernels lose to the AVX2 ones at the same width.** At 256 bits on the EPYC, `simd`'s
+  sweep ticked the crowd in 3.05 ms against the AVX2 kernel's 2.52, `Grid_RebuildPairsQuery`
+  mixed +5.5%, `View_Visible` with 100 entities +8%. With AVX2 the AVX2 kernels keep running, and
+  only they; `simd`'s run where there were none: arm64, wasm, amd64 without AVX2.
+* **simd is narrower on many AVX2 CPUs.** It takes 256 bits only with VPCLMULQDQ, so before Ice
+  Lake and on Zen 1 and 2 it runs at 128, half what the AVX2 kernels do; a library cannot ask for
+  more (`GODEBUG=simd=+256` is the program's).
+* **A query goes wide only over crowded cells.** Over cells of one to three pieces, as roids'
+  sparse scenes hold, a vector for a piece or two cost 4–10% against the plain test; over nine a
+  cell it gained 10%. So `Query` goes wide while the occupied cells hold a vector of pieces each
+  on average, and a cell of fewer than a vector is tested a piece at a time.
+* **The columns cost a rebuild.** Built with the cells, they are paid for by every query after:
+  eight queries a tick in the spread scene do not, so it runs 5–13% slower. Laying them in the
+  same pass as the cells instead of after made no difference to roids' broad phase.
+* **No move-mask.** `simd` has no mask-to-bits: through `ToArch` it is `VMOVMSKPS` on amd64, and
+  on Neon, which has none, an AND with the lane weights and one `ADDV`.
+
 ## Collision solver — `Benchmark_Solver_*`
 
 The solver alone, fed pre-computed pairs.
@@ -368,8 +420,10 @@ through the entry's pointer); their medians drift more under the machine's noise
 * **Zero allocations on the tick.** Rebuild, Pairs, Solve, Query and Scan all report 0 allocs/op once
   their buffers have grown to the scene.
 * **SIMD pays where the tests are many to a cell.** Eight boxes at a time tick the crowd in a third
-  of the plain sweep's time (2.32 against 7.30 ms) and do nothing for sparse cells; see
-  [Wide pair sweep](#wide-pair-sweep--goexperimentsimd) and [float32](#float32--v1170).
+  of the plain sweep's time (2.32 against 7.30 ms) and do nothing for sparse cells; Neon's four
+  at a time tick it in less than half (2.71 against 6.19). See
+  [Wide pair sweep](#wide-pair-sweep--goexperimentsimd), [float32](#float32--v1170) and
+  [simd's vectors](#simds-vectors--arm64-wasm-and-query).
 * **float32 halves the boxes.** A `plane.AABB` of 32 bytes instead of 64 makes the solver, folding
   and the crowded column tick faster in every build; sight, which keeps float64 inside, pays 3–9.5%
   for the conversions at its edges.
@@ -383,7 +437,9 @@ make bench-simd        # the suite once, built with GOEXPERIMENT=simd
 make bench-save-simd   # bench-save so built, into a file marked -simd
 ```
 
-`make test-simd` runs the tests built so, comparing the wide sweep with the plain one.
+`make test-simd` runs the tests built so, comparing every wide kernel the CPU runs with the plain
+code; `make test-simd-128` holds simd's vectors to 128 bits, `make test-simd-emulated` runs them
+with none, and `make vet-simd` vets the build for amd64, arm64 and wasm.
 
 To judge a change on this or any drifting machine, keep a copy of the baseline tree and run the two
 alternately, then compare medians:

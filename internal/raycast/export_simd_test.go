@@ -10,17 +10,6 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 )
 
-// SetWide has walks lay their slabs and walk the ground along their rays four angles at a time, or
-// work each out as it is cast, until t ends; it skips t on a CPU without AVX2.
-func SetWide(t testing.TB, on bool) {
-	if !archsimd.X86.AVX2() {
-		t.Skip("the CPU has no AVX2")
-	}
-	was := wide
-	wide = on
-	t.Cleanup(func() { wide = was })
-}
-
 // SideBySide is the ground along the rays from origin along one to four dirs for length over f
 // sunk by bend, walked side by side as a walk's block walks them; it skips t on a CPU without
 // AVX2.
