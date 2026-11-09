@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.21.0 — 2026-11-09
 
 **Still layer**
 - `Space.RebuildStill(runs, items)` hands the Space the boxes that stand until the next
