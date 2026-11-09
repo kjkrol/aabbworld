@@ -242,9 +242,10 @@ func keepWideQuery(t *testing.T) {
 	if !simdx.On() {
 		t.Skip("the simd package is emulated here")
 	}
-	was, wasFrom := wideQuery, queryWideFrom
-	queryWideFrom = 0
-	t.Cleanup(func() { wideQuery, queryWideFrom = was, wasFrom })
+	was, wasFrom, wasSparse := wideQuery, queryWideFrom, sparse
+	// A sparse layout lists its cells and answers from the list, before the vectors.
+	queryWideFrom, sparse = 0, false
+	t.Cleanup(func() { wideQuery, queryWideFrom, sparse = was, wasFrom, wasSparse })
 }
 
 // queryWith is what the grid reports for box, querying wide or not.

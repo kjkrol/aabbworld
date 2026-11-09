@@ -17,16 +17,32 @@ func (g *Grid) QueryCone(
 	area geom.AABB, origin, dir geom.Vec, halfAngle, radius float32, want Capability,
 	fn func(uid.UID64),
 ) int {
+	found := g.queryCone(area, origin, dir, halfAngle, radius, want, fn)
+	if still, ok := g.standing(); ok {
+		found += still.queryCone(area, origin, dir, halfAngle, radius, want, fn)
+	}
+	return found
+}
+
+func (g *Grid) queryCone(
+	area geom.AABB, origin, dir geom.Vec, halfAngle, radius float32, want Capability,
+	fn func(uid.UID64),
+) int {
 	q, ok := g.newConeQuery(area, origin, dir, halfAngle, radius)
 	if !ok {
 		return 0
 	}
 	g.Ready()
+	if wide && g.colsBehind.Load() {
+		g.colsUp()
+	}
+	if g.spans.listed {
+		if listed, ok := g.spans.listedIn(q.x1, q.y1, q.x2, q.y2, g.side); ok {
+			return g.walkConeListed(&q, listed, want, fn)
+		}
+	}
 	if !wide {
 		return g.walkCone(&q, want, fn)
-	}
-	if g.colsBehind.Load() {
-		g.colsUp()
 	}
 	return g.walkConeWide(&q, want, fn)
 }
@@ -176,8 +192,8 @@ func (g *Grid) walkCone(q *coneQuery, want Capability, fn func(uid.UID64)) int {
 		ownY := g.ownedFrom(y, q.y1)
 		for x := q.x1; x <= q.x2; x++ {
 			ownX := g.ownedFrom(x, q.x1)
-			cell := y*g.side + x
-			for k := g.starts[cell]; k < g.starts[cell+1]; k++ {
+			from, to := g.spans.entries(y*g.side + x)
+			for k := from; k < to; k++ {
 				c := &g.cells[k]
 				if !c.caps.matches(want) || !(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) ||
 					!q.holds(&c.box) {
@@ -191,9 +207,35 @@ func (g *Grid) walkCone(q *coneQuery, want Capability, fn func(uid.UID64)) int {
 	return found
 }
 
-// ownedFrom is where a piece in column or row n of the walk must begin for that cell to own it, as
-// Query's cellOf test says: a piece in a cell begins in it or before it, so anywhere on the first
-// column or row walked and past the cell's first edge on the rest.
+// walkConeListed is walkCone over the listed cells under q alone: few pieces, so one at a time
+// in every build, which keeps what the wide walk keeps.
+func (g *Grid) walkConeListed(
+	q *coneQuery, listed []uint32, want Capability, fn func(uid.UID64),
+) int {
+	found := 0
+	for _, cell := range listed {
+		x, y := cell%g.side, cell/g.side
+		if x < q.x1 || x > q.x2 {
+			continue
+		}
+		ownX, ownY := g.ownedFrom(x, q.x1), g.ownedFrom(y, q.y1)
+		from, to := g.spans.entries(cell)
+		for k := from; k < to; k++ {
+			c := &g.cells[k]
+			if !c.caps.matches(want) || !(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) ||
+				!q.holds(&c.box) {
+				continue
+			}
+			fn(c.id)
+			found++
+		}
+	}
+	return found
+}
+
+// ownedFrom is where a piece in column or row n of the walk must begin for that cell to own it: a
+// piece in a cell begins in it or before it, so anywhere on the first column or row walked and
+// past the cell's first edge on the rest.
 func (g *Grid) ownedFrom(n, first uint32) float32 {
 	if n == first {
 		return float32(math.Inf(-1))

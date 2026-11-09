@@ -30,6 +30,14 @@ type Engine struct {
 	moved  []uint32
 	stamp  uint32
 
+	// The still items a pair has met join the batch past the moving ones: batch holds them all,
+	// heldAt the batch position of each still item, good while its heldOn is the stamp.
+	moving int
+	still  []spatial.Entry
+	batch  []spatial.Entry
+	heldAt []int32
+	heldOn []uint32
+
 	onPair func(a, b int32)
 	touch  Touch
 	tell   func(i int, pen geom.Vec)
@@ -61,12 +69,25 @@ func New(grid *spatial.Grid, surface *iplane.Surface, handler Handler, reach flo
 // boxes where they lie. The grid answers its next Query with them on its own; no Rebuild is owed.
 func (e *Engine) Tick() {
 	e.items = e.grid.Items()
+	e.moving, e.still = len(e.items), e.grid.StillItems()
+	e.stamp++
+	if len(e.still) > 0 {
+		e.batch = append(e.batch[:0], e.items...)
+		e.items = e.batch
+		if len(e.heldOn) < len(e.still) {
+			e.heldAt = make([]int32, len(e.still))
+			e.heldOn = make([]uint32, len(e.still))
+		}
+	}
 	e.solver.Reset(len(e.items))
 	e.left = e.left[:0]
 	e.grid.Pairs(e.reach, spatial.CanCollide, e.onPair)
+	if len(e.items) > e.moving {
+		e.batch = e.items
+		e.solver.Fit(len(e.items))
+	}
 	e.solver.Solve(e.items, e.surface, e.iterations, e.touch, e.tell, e.field)
 
-	e.stamp++
 	if cap(e.moved) < len(e.items) {
 		e.moved = make([]uint32, len(e.items))
 	}
@@ -81,10 +102,26 @@ func (e *Engine) Left() []pcollide.Leaver { return e.left }
 
 // add takes a pair the grid found, lower entity id first, as the handler has always heard them.
 func (e *Engine) add(a, b int32) {
+	if int(b) >= e.moving {
+		b = e.hold(b - int32(e.moving))
+	}
 	if e.items[a].ID.Index() > e.items[b].ID.Index() {
 		a, b = b, a
 	}
 	e.solver.Add(Pair{A: a, B: b, Flags: flagsOf(e.items[a].Caps, e.items[b].Caps)})
+}
+
+// hold is the batch position of still item i, which joins the batch, Static, at its first pair.
+func (e *Engine) hold(i int32) int32 {
+	if e.heldOn[i] == e.stamp {
+		return e.heldAt[i]
+	}
+	it := e.still[i]
+	it.Caps |= spatial.Static
+	at := int32(len(e.items))
+	e.items = append(e.items, it)
+	e.heldAt[i], e.heldOn[i] = at, e.stamp
+	return at
 }
 
 func (e *Engine) ask(i int, pen geom.Vec) (geom.Vec, float32, bool) {

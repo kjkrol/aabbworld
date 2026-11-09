@@ -78,19 +78,27 @@ type Grid struct {
 	mu       sync.Mutex  // whoever reads first after a Rebuild or Invalidate brings the grid up
 
 	pieces []gridPiece
-	starts []uint32
-	cursor []uint32
+	spans  spans
 	cells  []gridCell
 	sweep  pairSweep
 
 	cols       cellCols    // the cells' boxes as QueryCone and Query load them, a vector at a time
 	colsAsked  bool        // a cone or a wide query was asked: the cells are built with their columns
 	colsBehind atomic.Bool // the columns are behind the cells
-	occupied   int         // the cells holding a piece or more
 
 	listingID   uid.UID64
 	listingCaps Capability
 	onImage     plane.FragVisitor
+
+	still *Grid // the boxes that stand, nil until a RebuildStill
+	laid  laidFor
+}
+
+// laidFor is what a still layer's sweep was laid out for, to be paired with a moving layer.
+type laidFor struct {
+	rebuild uint32
+	reach   float32
+	want    Capability
 }
 
 // gridPiece is one image of an item as the grid holds it, and the cells it covers.
@@ -155,6 +163,22 @@ func (g *Grid) RebuildRuns(runs []Run, items []Item) {
 	g.stale.Store(true)
 }
 
+// RebuildStill replaces the still layer with the records of runs and items, held as RebuildRuns
+// holds its own: boxes that stand until the next RebuildStill, indexed once and seen by every
+// question beside the moving ones, paired by Pairs with those alone.
+func (g *Grid) RebuildStill(runs []Run, items []Item) {
+	if g.still == nil {
+		g.still = &Grid{surface: g.surface, cellRes: g.cellRes, side: g.side, maxCoord: g.maxCoord}
+		g.still.onImage = g.still.addImage
+	}
+	g.still.RebuildRuns(runs, items)
+}
+
+// standing is the still layer when it holds anything.
+func (g *Grid) standing() (*Grid, bool) {
+	return g.still, g.still != nil && g.still.count > 0
+}
+
 // Invalidate marks the cells as behind the boxes of the items, which have moved since they were built.
 func (g *Grid) Invalidate() { g.stale.Store(true) }
 
@@ -164,6 +188,9 @@ func (g *Grid) Invalidate() { g.stale.Store(true) }
 func (g *Grid) Ready() {
 	if g.stale.Load() {
 		g.bringUp()
+	}
+	if still, ok := g.standing(); ok {
+		still.Ready()
 	}
 }
 
@@ -199,14 +226,7 @@ func (g *Grid) index() {
 		g.mapIDs()
 	}
 	g.pieces = g.pieces[:0]
-	cells := int(g.side) * int(g.side)
-	if cap(g.starts) < cells+1 {
-		g.starts = make([]uint32, cells+1)
-		g.cursor = make([]uint32, cells)
-	}
-	g.starts = g.starts[:cells+1]
-	g.cursor = g.cursor[:cells]
-	clear(g.starts)
+	g.spans.reset(int(g.side) * int(g.side))
 
 	for ci := range g.columns {
 		c := &g.columns[ci]
@@ -222,29 +242,16 @@ func (g *Grid) index() {
 		}
 	}
 
-	occupied := 0
-	for i := range g.starts {
-		if g.starts[i] != 0 {
-			occupied++
-		}
-		if i > 0 {
-			g.starts[i] += g.starts[i-1]
-		}
-	}
-	g.occupied = occupied
-	copy(g.cursor, g.starts)
-	total := int(g.starts[cells])
+	total := g.spans.place()
 	if cap(g.cells) < total {
 		g.cells = make([]gridCell, total)
 	}
 	g.cells = g.cells[:total]
-	for i := range g.pieces {
+	for i := len(g.pieces) - 1; i >= 0; i-- {
 		p := &g.pieces[i]
 		for y := p.y1; y <= p.y2; y++ {
 			for x := p.x1; x <= p.x2; x++ {
-				cell := y*g.side + x
-				g.cells[g.cursor[cell]] = p.gridCell
-				g.cursor[cell]++
+				g.cells[g.spans.take(y*g.side+x)] = p.gridCell
 			}
 		}
 	}
@@ -270,7 +277,7 @@ func (g *Grid) add(box geom.AABB, id uid.UID64, caps Capability) {
 	}
 	for y := p.y1; y <= p.y2; y++ {
 		for x := p.x1; x <= p.x2; x++ {
-			g.starts[y*g.side+x+1]++
+			g.spans.count(y*g.side + x)
 		}
 	}
 	g.pieces = append(g.pieces, p)
@@ -294,8 +301,18 @@ func (g *Grid) remember(id uid.UID64, at int32) {
 	g.slotOf[i], g.stamps[i] = at, g.rebuilds
 }
 
-// Item is the item the entity id names, if the last Rebuild was told of it.
+// Item is the item the entity id names, if the last Rebuild or RebuildStill was told of it.
 func (g *Grid) Item(id uid.UID64) (*Entry, bool) {
+	if e, ok := g.item(id); ok {
+		return e, true
+	}
+	if still, ok := g.standing(); ok {
+		return still.item(id)
+	}
+	return nil, false
+}
+
+func (g *Grid) item(id uid.UID64) (*Entry, bool) {
 	g.readyListed()
 	i := int(id.Index())
 	if i >= len(g.slotOf) || g.stamps[i] != g.rebuilds {
@@ -323,6 +340,15 @@ func (g *Grid) Items() []Entry {
 	return g.entries
 }
 
+// StillItems is what the last RebuildStill was told of, by position, Pairs counting them on past
+// the Items.
+func (g *Grid) StillItems() []Entry {
+	if still, ok := g.standing(); ok {
+		return still.Items()
+	}
+	return nil
+}
+
 func (g *Grid) items() []Entry {
 	if g.listed != g.rebuilds {
 		g.list()
@@ -348,6 +374,14 @@ func (g *Grid) list() {
 // Query calls fn for every piece sharing want that intersects box, each once, and returns how many.
 // It reads the boxes as they are now, building the cells first if they are behind.
 func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
+	found := g.query(box, want, fn)
+	if still, ok := g.standing(); ok {
+		found += still.query(box, want, fn)
+	}
+	return found
+}
+
+func (g *Grid) query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	area, ok := g.clamp(box)
 	if !ok {
 		return 0
@@ -355,7 +389,12 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	g.Ready()
 	x1, y1 := g.cellOf(area.TopLeft.X), g.cellOf(area.TopLeft.Y)
 	x2, y2 := g.cellOf(area.BottomRight.X), g.cellOf(area.BottomRight.Y)
-	if wideQuery && len(g.cells) >= queryWideFrom*lanes32()*g.occupied {
+	if g.spans.listed {
+		if listed, ok := g.spans.listedIn(x1, y1, x2, y2, g.side); ok {
+			return g.queryListed(listed, area, x1, y1, x2, want, fn)
+		}
+	}
+	if wideQuery && len(g.cells) >= queryWideFrom*lanes32()*g.spans.occupied {
 		if g.colsBehind.Load() {
 			g.colsUp()
 		}
@@ -363,13 +402,13 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	}
 	found := 0
 	for y := y1; y <= y2; y++ {
+		ownY := g.ownedFrom(y, y1)
 		for x := x1; x <= x2; x++ {
-			cell := y*g.side + x
-			for _, c := range g.cells[g.starts[cell]:g.starts[cell+1]] {
-				if !c.caps.matches(want) || !area.Intersects(c.box) {
-					continue
-				}
-				if max(g.cellOf(c.box.TopLeft.X), x1) != x || max(g.cellOf(c.box.TopLeft.Y), y1) != y {
+			ownX := g.ownedFrom(x, x1)
+			from, to := g.spans.entries(y*g.side + x)
+			for _, c := range g.cells[from:to] {
+				if !c.caps.matches(want) || !area.Intersects(c.box) ||
+					!(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) {
 					continue
 				}
 				fn(c.id)
@@ -380,15 +419,57 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	return found
 }
 
+// queryListed is query over the listed cells of the area alone, in the order it walks them.
+func (g *Grid) queryListed(
+	listed []uint32, area geom.AABB, x1, y1, x2 uint32, want Capability, fn func(uid.UID64),
+) int {
+	found := 0
+	for _, cell := range listed {
+		x, y := cell%g.side, cell/g.side
+		if x < x1 || x > x2 {
+			continue
+		}
+		ownX, ownY := g.ownedFrom(x, x1), g.ownedFrom(y, y1)
+		from, to := g.spans.entries(cell)
+		for _, c := range g.cells[from:to] {
+			if !c.caps.matches(want) || !area.Intersects(c.box) ||
+				!(c.box.TopLeft.X >= ownX && c.box.TopLeft.Y >= ownY) {
+				continue
+			}
+			fn(c.id)
+			found++
+		}
+	}
+	return found
+}
+
 // Pairs calls fn once, lower position first, for every two items sharing want whose boxes grown
-// by reach of their shorter side touch. It reads the boxes as they are now.
+// by reach of their shorter side touch, but never two still ones, a still one counted on past the
+// Items. It reads the moving boxes as they are now, the still ones as they were first laid out.
 func (g *Grid) Pairs(reach float32, want Capability, fn func(a, b int32)) {
 	s := &g.sweep
 	s.shift, s.side = g.cellRes, g.side
 	s.listItems(g.surface, g.columns, reach, want)
 	s.sort()
 	s.visit(fn)
+	if still, ok := g.standing(); ok {
+		still.layOut(reach, want)
+		s.cross(&still.sweep, int32(g.count), fn)
+	}
 	s.flushSeam(fn)
+}
+
+// layOut lays a still layer's boxes out for Pairs, once a RebuildStill, reach and want.
+func (g *Grid) layOut(reach float32, want Capability) {
+	laid := laidFor{rebuild: g.rebuilds, reach: reach, want: want}
+	if g.laid == laid {
+		return
+	}
+	s := &g.sweep
+	s.shift, s.side = g.cellRes, g.side
+	s.listItems(g.surface, g.columns, reach, want)
+	s.sort()
+	g.laid = laid
 }
 
 // cellOf is the column or row holding v, held inside the grid.

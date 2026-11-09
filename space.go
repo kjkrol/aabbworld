@@ -169,11 +169,25 @@ func (s *Space) Rebuild(items []Item) { s.RebuildRuns(nil, items) }
 // Capability may not. Until the last Query, Scan or Tick before the next Rebuild, the memory under
 // both must hold the same records in the same places; a caller that moves records, as an ECS does
 // when entities migrate (in goke, once any table's ChunkSnapshot.TableVer changed), gathers its
-// runs again and rebuilds.
+// runs again and rebuilds. The boxes of RebuildStill are left as they are.
 func (s *Space) RebuildRuns(runs []Run, items []Item) {
-	s.grid.RebuildRuns(
-		unsafe.Slice((*spatial.Run)(unsafe.Pointer(unsafe.SliceData(runs))), len(runs)),
-		unsafe.Slice((*spatial.Item)(unsafe.Pointer(unsafe.SliceData(items))), len(items)))
+	s.grid.RebuildRuns(spatialRuns(runs), spatialItems(items))
+}
+
+// RebuildStill hands the Space the boxes that stand until the next RebuildStill, over runs and
+// items held as RebuildRuns holds its own but indexed once, however many Rebuilds follow. Every
+// question sees them beside the boxes of Rebuild, and a Tick pairs them with those alone, never
+// moving them; an entity is one or the other, never both.
+func (s *Space) RebuildStill(runs []Run, items []Item) {
+	s.grid.RebuildStill(spatialRuns(runs), spatialItems(items))
+}
+
+func spatialRuns(runs []Run) []spatial.Run {
+	return unsafe.Slice((*spatial.Run)(unsafe.Pointer(unsafe.SliceData(runs))), len(runs))
+}
+
+func spatialItems(items []Item) []spatial.Item {
+	return unsafe.Slice((*spatial.Item)(unsafe.Pointer(unsafe.SliceData(items))), len(items))
 }
 
 // Place puts a fresh box under the edge rules; false if it lies wholly past an open edge.

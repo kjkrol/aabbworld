@@ -43,5 +43,6 @@
 //
 // An Engine serves one goroutine. Tick reads the boxes of its Space as they are now — the Space
 // need only have been Rebuilt since the items changed — and leaves them pushed apart; the Space
-// answers its next Query with the pushed boxes on its own.
+// answers its next Query with the pushed boxes on its own. A still box (Space.RebuildStill) is
+// paired with the moving boxes alone and never pushed, as though it were Static.
 package collide

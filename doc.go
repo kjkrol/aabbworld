@@ -27,6 +27,13 @@
 // boxes where they lie and a collision engine pushes them there, so the column is the only copy;
 // the records must not move between slots until the last question before the next Rebuild.
 //
+// Boxes that stand for good — trees, houses, a wall as an entity — are handed over apart, by
+// [Space.RebuildStill], in runs and items as RebuildRuns takes them. The Space indexes them once
+// and keeps them across every Rebuild, which then speaks of the boxes that move alone: every
+// question sees both, and a collision engine pairs a still box with the moving ones, never with
+// another still one, and never pushes it. A tick then costs what moves, not what stands. An entity
+// is still or moving, never both, and a still box stays where it is until the next RebuildStill.
+//
 // # Numbers
 //
 // Every coordinate, size, distance and angle a Space takes or gives is a float32, so a box is 32
@@ -61,9 +68,11 @@
 // One tick of a simulation reads:
 //
 //  1. Move the boxes: [Space.Move] on each, under the edge rules.
-//  2. [Space.Rebuild] with the items as they now stand, or [Space.RebuildRuns] with the runs.
+//  2. [Space.Rebuild] with the items as they now stand, or [Space.RebuildRuns] with the runs; the
+//     boxes of [Space.RebuildStill] stay as they were.
 //  3. [collide.Engine.Tick] on the engine built by [Space.CollideEngine]: every two CanCollide boxes
-//     within reach of each other are paired, each overlapping pair is put to the handler's Touch,
+//     within reach of each other are paired, but never two still ones, each overlapping pair is
+//     put to the handler's Touch,
 //     confirmed pairs are separated over a few passes and reported by Contact, and every box that
 //     was pushed is reported once by Moved — unless the push took it out through an open edge, in
 //     which case it is listed by [collide.Engine.Left] instead, with the box it came to rest at. With collide.Config.Field the
@@ -143,8 +152,8 @@
 //	Layer 0   geom              — the vocabulary: Vec, AABB
 //	Layer 1   plane             — AABB with a Size and an Overhang, wrapped pieces, Overlap        (→ geom)
 //	Layer 2   internal/plane    — Surface: the edge rules; Translate, Expand, WrapAABB, Left      (→ geom, plane)
-//	Layer 3   internal/spatial  — Grid: the items, lazy cells for Query, a sweep for Pairs;
-//	                              Capability, Resolution                                          (→ geom, plane, internal/plane)
+//	Layer 3   internal/spatial  — Grid: the items, lazy cells for Query, a sweep for Pairs, a still
+//	                              layer; Capability, Resolution                                   (→ geom, plane, internal/plane)
 //	          internal/raycast  — View: a cone scan over any queryable index, shadows and depths  (→ geom)
 //	          collide           — the public contract of an engine: Config, Handler, Engine       (→ geom, plane)
 //	Layer 4   internal/collide  — Engine over a Grid: Pairs → Solver → Handler; Left               (→ geom, plane, internal/plane, internal/spatial)

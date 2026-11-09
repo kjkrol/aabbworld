@@ -8,7 +8,8 @@
 // the pairs to a [Solver], and afterwards reports each pushed item once — as Moved, or as Left, with
 // the box it came to rest at, when the push took it wholly out through an open edge. It then tells
 // the grid its cells are behind, so
-// the next Query sees the pushed boxes.
+// the next Query sees the pushed boxes. A still item a pair meets joins the batch past the moving
+// ones, Static, the first time.
 //
 // # Solver
 //
