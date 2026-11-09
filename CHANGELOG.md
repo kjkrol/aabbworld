@@ -28,6 +28,16 @@
   of mixed sizes 7.78 → 6.58 ms, `Collide_Ground` 3–9% and `BroadPhase` ticks 3.5–4.6% faster in
   the plain build, the 256-bucket crowd 1.5–2.9% slower; sight as it was.
 
+**Fixed**
+- `Query` in the world's last unit (#26): the grid held a query's corners, and its pieces', to the
+  last whole coordinate, 511 in a world 512 wide, and tested them so, so an area from 511.5 met a
+  box ending at 511 and an area past a closed edge met every box on it. The pieces and the areas
+  are kept as they come, the grid holding only its cell indices; a query past an edge that does
+  not wrap meets what hangs out there and nothing else.
+- `Query` on a seam (#27): an area ending exactly on a wrapping edge, x = 512 in a world 512
+  wide, meets a box beginning at x = 0, as one beginning at 0 meets a box ending at 512, and the
+  corner likewise; before, the seam's line was no image and the two were never met.
+
 ## v1.20.0 — 2026-11-09
 
 **SIMD**

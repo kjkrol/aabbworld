@@ -117,16 +117,16 @@ func (g *Grid) newConeQuery(
 	if cut.TopLeft.X > cut.BottomRight.X || cut.TopLeft.Y > cut.BottomRight.Y {
 		return coneQuery{}, false
 	}
-	box, ok := g.clamp(cut)
+	held, ok := g.clamp(cut)
 	if !ok {
 		return coneQuery{}, false
 	}
 	q := coneQuery{
-		area:  box,
-		x1:    g.cellOf(box.TopLeft.X),
-		y1:    g.cellOf(box.TopLeft.Y),
-		x2:    g.cellOf(box.BottomRight.X),
-		y2:    g.cellOf(box.BottomRight.Y),
+		area:  cut,
+		x1:    g.cellOf(held.TopLeft.X),
+		y1:    g.cellOf(held.TopLeft.Y),
+		x2:    g.cellOf(held.BottomRight.X),
+		y2:    g.cellOf(held.BottomRight.Y),
 		ox:    origin.X,
 		oy:    origin.Y,
 		r2:    float32((r + slack) * (r + slack)),

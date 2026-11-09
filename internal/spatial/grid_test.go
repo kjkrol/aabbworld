@@ -59,17 +59,13 @@ func (sc *scene) step(rng *rand.Rand) {
 
 // inside lists, by brute force, every item sharing want whose main box or image intersects box.
 func (sc *scene) inside(box geom.AABB, want Capability) (ids []uid.UID64, pieces int) {
-	area, ok := sc.grid.clamp(box)
-	if !ok {
-		return nil, 0
-	}
 	for _, it := range sc.items {
 		if !it.Caps.matches(want) {
 			continue
 		}
 		hit := false
 		for _, img := range images(it.Box) {
-			if clamped, ok := sc.grid.clamp(img); ok && clamped.Intersects(area) {
+			if img.Intersects(box) {
 				pieces++
 				hit = true
 			}

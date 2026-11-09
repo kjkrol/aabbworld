@@ -238,16 +238,53 @@ func (s *Space) Bounds() (width, height uint32, edges Edges) {
 	return s.Config.Width, s.Config.Height, s.Config.Edges
 }
 
-// Query calls fn for every indexed piece in box sharing want, seams included, and returns how many.
+// Query calls fn for every indexed piece in box sharing want, seams included, and returns how many:
+// on a wrapping axis a box ending exactly on the seam meets what begins on its other side; past an
+// edge that does not wrap it meets what hangs out there and nothing else.
 func (s *Space) Query(box geom.AABB, want Capability, fn func(id uid.UID64)) int {
 	area := s.surface.WrapAABB(box)
 	caps := spatial.Capability(want)
-	found := s.grid.Query(area.AABB, caps, fn)
-	area.VisitFragments(func(_ plane.FragPosition, image geom.AABB) bool {
-		found += s.grid.Query(image, caps, fn)
-		return true
-	})
+	var xs, ys [3]geom.Vec
+	nx := spans(&xs, geom.NewVec(box.TopLeft.X, box.BottomRight.X),
+		geom.NewVec(area.TopLeft.X, area.BottomRight.X), area.Overhang.X, float32(s.Width),
+		s.Edges.WrapsX())
+	ny := spans(&ys, geom.NewVec(box.TopLeft.Y, box.BottomRight.Y),
+		geom.NewVec(area.TopLeft.Y, area.BottomRight.Y), area.Overhang.Y, float32(s.Height),
+		s.Edges.WrapsY())
+	found := 0
+	for _, x := range xs[:nx] {
+		for _, y := range ys[:ny] {
+			found += s.grid.Query(geom.NewAABB(geom.NewVec(x.X, y.X), geom.NewVec(x.Y, y.Y)), caps,
+				fn)
+		}
+	}
 	return found
+}
+
+// spans lays into to the ranges an area covers along one axis of a world size long, and returns
+// how many: on an axis that does not wrap the range asked, as it is; on one that wraps the folded
+// range, the image of its overhang, and the seam's line where it ends exactly on the seam, so that
+// it meets what begins on the seam's other side.
+func spans(to *[3]geom.Vec, asked, folded geom.Vec, overhang, size float32, wraps bool) int {
+	if !wraps {
+		to[0] = asked
+		return 1
+	}
+	to[0] = folded
+	lo, hi := folded.X, folded.Y
+	n := 1
+	switch {
+	case overhang > 0:
+		to[n] = geom.NewVec(0, overhang)
+		n++
+	case hi == size && lo > 0:
+		to[n] = geom.NewVec(0, 0)
+		n++
+	case lo == 0 && hi < size:
+		to[n] = geom.NewVec(size, size)
+		n++
+	}
+	return n
 }
 
 // QueryCone calls fn for every indexed piece that may reach into the cone — within radius of

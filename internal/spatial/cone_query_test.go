@@ -145,15 +145,15 @@ func checkCone(t *testing.T, sc *scene, area geom.AABB, c cone, want Capability)
 	if n != len(got) {
 		t.Fatalf("%+v: QueryCone counted %d, called back %d times", c, n, len(got))
 	}
-	walked, ok := sc.grid.clamp(area)
+	walked := area
 	must, may := map[uid.UID64]bool{}, map[uid.UID64]int{}
 	for _, it := range sc.items {
-		if !ok || !it.Caps.matches(want) {
+		if !it.Caps.matches(want) {
 			continue
 		}
 		for _, img := range images(it.Box) {
-			piece, in := sc.grid.clamp(img)
-			if !in || !piece.Intersects(walked) {
+			piece := img
+			if !piece.Intersects(walked) {
 				continue
 			}
 			inside := geom.NewAABB(
