@@ -402,7 +402,7 @@ Runs drop the copy and the id map, not the work: indexing reads the 72-byte reco
 benchmarks, through the old entry, are within 1–3% of v1.13.0 by their minima (a box read
 through the entry's pointer); their medians drift more under the machine's noise.
 
-## Still layer and sparse cells — v1.20.0
+## Still layer and sparse cells — v1.21.0
 
 `Benchmark_Still_*` is gram's Madeira: 31,000 trees 20×20 and houses 40×40 standing over a world of
 20,480×10,240 with 64-unit buckets (a grid of 512² cells), one in eight a house that collides
@@ -412,7 +412,7 @@ units, as v1.19.0 must; `still` hands them to `RebuildStill` once. The v1.19.0 t
 alternately on an idle machine, `-cpu 1`, median of 6, 2026-11-08, plain build (the SIMD build
 within 1–3% of it on these rows).
 
-| Benchmark | layer | v1.19.0 | v1.20.0 |
+| Benchmark | layer | v1.19.0 | v1.21.0 |
 |:---|:---|---:|---:|
 | `RebuildRuns` + the first `Query` of a 2,560×1,440 view | none | 449 µs | **3.0 µs** |
 | | moving | 2.01 ms | 1.77 ms |
@@ -432,7 +432,7 @@ the view's cells walked twice: +1.4 µs over one.
 
 The rest of the suite, the same runs:
 
-| Scene | build | v1.19.0 | v1.20.0 | change |
+| Scene | build | v1.19.0 | v1.21.0 | change |
 |:---|:---|---:|---:|:---|
 | `BroadPhase` tick, 8,388 boxes 10×10 covering 20%, bucket 32 | plain | 1.66 ms | 1.59 ms | 4.5% faster |
 | `BroadPhase` tick, 16,777 boxes covering 40% | plain | 5.54 ms | 5.29 ms | 4.6% faster |

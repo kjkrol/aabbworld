@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.21.1 — 2026-11-09
+
+**Docs**
+- `CLAUDE.md`: what the library is, the commands and the four test builds, the rules of the house,
+  the testing conventions, how docs, benchmarks and commits are written.
+- The skills: `simd` without the numbers and the dates (`BENCHMARKS.md`'s and this file's) and
+  current with v1.21.0; `spatial`, new: the grid's two layouts, the cells listed while sparse, the
+  still layer and how a tick pairs it, what `Query` promises at the edges, the oracles, the traps.
+- `BENCHMARKS.md`: the still layer and sparse cells landed as v1.21.0, not v1.20.0. Two boxes
+  meeting exactly on a torus seam make no pair, as none meeting so anywhere do (checked under #27).
+
 ## v1.21.0 — 2026-11-09
 
 **Still layer**
