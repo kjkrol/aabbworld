@@ -232,9 +232,7 @@ func (g *Grid) index() {
 		c := &g.columns[ci]
 		for i := range c.n {
 			box, caps, id := c.box(i), *c.caps(i), c.idAt(i)
-			if main, ok := g.clamp(box.AABB); ok {
-				g.add(main, id, caps)
-			}
+			g.add(box.AABB, id, caps)
 			if box.Overhang != (geom.Vec{}) {
 				g.listingID, g.listingCaps = id, caps
 				box.VisitFragments(g.onImage)
@@ -263,17 +261,21 @@ func (g *Grid) index() {
 }
 
 func (g *Grid) addImage(_ plane.FragPosition, image geom.AABB) bool {
-	if frag, ok := g.clamp(image); ok {
-		g.add(frag, g.listingID, g.listingCaps)
-	}
+	g.add(image, g.listingID, g.listingCaps)
 	return true
 }
 
+// add lays box into the cells it reaches, held as it is: a query meets it where it truly lies, in
+// the world's last unit or past an open edge too.
 func (g *Grid) add(box geom.AABB, id uid.UID64, caps Capability) {
+	held, ok := g.clamp(box)
+	if !ok {
+		return
+	}
 	p := gridPiece{
 		gridCell: gridCell{box: box, id: id, caps: caps},
-		x1:       g.cellOf(box.TopLeft.X), y1: g.cellOf(box.TopLeft.Y),
-		x2: g.cellOf(box.BottomRight.X), y2: g.cellOf(box.BottomRight.Y),
+		x1:       g.cellOf(held.TopLeft.X), y1: g.cellOf(held.TopLeft.Y),
+		x2: g.cellOf(held.BottomRight.X), y2: g.cellOf(held.BottomRight.Y),
 	}
 	for y := p.y1; y <= p.y2; y++ {
 		for x := p.x1; x <= p.x2; x++ {
@@ -381,25 +383,27 @@ func (g *Grid) Query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
 	return found
 }
 
+// query walks the cells box reaches, held to the grid, and tests the pieces against box as it is.
 func (g *Grid) query(box geom.AABB, want Capability, fn func(uid.UID64)) int {
-	area, ok := g.clamp(box)
+	held, ok := g.clamp(box)
 	if !ok {
 		return 0
 	}
 	g.Ready()
-	x1, y1 := g.cellOf(area.TopLeft.X), g.cellOf(area.TopLeft.Y)
-	x2, y2 := g.cellOf(area.BottomRight.X), g.cellOf(area.BottomRight.Y)
+	x1, y1 := g.cellOf(held.TopLeft.X), g.cellOf(held.TopLeft.Y)
+	x2, y2 := g.cellOf(held.BottomRight.X), g.cellOf(held.BottomRight.Y)
 	if g.spans.listed {
 		if listed, ok := g.spans.listedIn(x1, y1, x2, y2, g.side); ok {
-			return g.queryListed(listed, area, x1, y1, x2, want, fn)
+			return g.queryListed(listed, box, x1, y1, x2, want, fn)
 		}
 	}
 	if wideQuery && len(g.cells) >= queryWideFrom*lanes32()*g.spans.occupied {
 		if g.colsBehind.Load() {
 			g.colsUp()
 		}
-		return g.queryWide(area, x1, y1, x2, y2, want, fn)
+		return g.queryWide(box, x1, y1, x2, y2, want, fn)
 	}
+	area := box
 	found := 0
 	for y := y1; y <= y2; y++ {
 		ownY := g.ownedFrom(y, y1)
@@ -480,7 +484,8 @@ func (g *Grid) cellOf(v float32) uint32 {
 	return min(uint32(v)>>g.cellRes, g.side-1)
 }
 
-// clamp holds box inside the grid; false when nothing of it is.
+// clamp holds box's corners to the coordinates the grid has cells for; false for a box turned
+// inside out. The pieces and the areas themselves are kept as they come.
 func (g *Grid) clamp(box geom.AABB) (geom.AABB, bool) {
 	minX := clampToGrid(box.TopLeft.X, g.maxCoord)
 	minY := clampToGrid(box.TopLeft.Y, g.maxCoord)

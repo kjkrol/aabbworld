@@ -112,3 +112,70 @@ func meeting(items []aabbworld.Item, area geom.AABB, want aabbworld.Capability, 
 	slices.Sort(ids)
 	return ids
 }
+
+func querySeam(t *testing.T, edges aabbworld.Edges, boxes ...plane.AABB) func(geom.AABB) []uid.UID64 {
+	t.Helper()
+	space, err := aabbworld.NewSpace(aabbworld.Config{Width: 512, Height: 512, Edges: edges,
+		BucketSize: 32})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := make([]aabbworld.Item, len(boxes))
+	for i, b := range boxes {
+		items[i] = aabbworld.Item{ID: uid.UID64(i + 1), Caps: aabbworld.CanCollide, Box: b}
+		space.Place(&items[i].Box)
+	}
+	space.Rebuild(items)
+	return func(area geom.AABB) []uid.UID64 {
+		var got []uid.UID64
+		space.Query(area, aabbworld.CanCollide, func(id uid.UID64) { got = append(got, id) })
+		slices.Sort(got)
+		return got
+	}
+}
+
+func TestSpace_Query_InTheWorldsLastUnitMeetsOnlyWhatReachesIntoIt(t *testing.T) {
+	ask := querySeam(t, 0,
+		plane.NewAABB(geom.NewVec(505, 100), 6, 6),     // 1: ends at 511
+		plane.NewAABB(geom.NewVec(506, 200), 6, 6),     // 2: ends at 512, the world's edge
+		plane.NewAABB(geom.NewVec(511.5, 300), 0.5, 6)) // 3: within the last unit
+	for name, c := range map[string]struct {
+		area geom.AABB
+		want []uid.UID64
+	}{
+		"beside the first":     {geom.NewAABB(geom.NewVec(511.5, 100), geom.NewVec(511.9, 106)), nil},
+		"touching the first":   {geom.NewAABB(geom.NewVec(511, 100), geom.NewVec(511.9, 106)), []uid.UID64{1}},
+		"into the second":      {geom.NewAABB(geom.NewVec(511.5, 200), geom.NewVec(511.9, 206)), []uid.UID64{2}},
+		"the third":            {geom.NewAABB(geom.NewVec(511.6, 300), geom.NewVec(511.8, 306)), []uid.UID64{3}},
+		"past the edge":        {geom.NewAABB(geom.NewVec(600, 0), geom.NewVec(700, 512)), nil},
+		"up to the edge, wide": {geom.NewAABB(geom.NewVec(511.5, 0), geom.NewVec(600, 512)), []uid.UID64{2, 3}},
+	} {
+		if got := ask(c.area); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v found %v, want %v", name, c.area, got, c.want)
+		}
+	}
+}
+
+func TestSpace_Query_OnTheSeamMeetsWhatBeginsOnItsOtherSide(t *testing.T) {
+	ask := querySeam(t, aabbworld.Torus,
+		plane.NewAABB(geom.NewVec(0, 100), 6, 6),   // 1: begins on the seam
+		plane.NewAABB(geom.NewVec(506, 200), 6, 6), // 2: ends on the seam
+		plane.NewAABB(geom.NewVec(0, 0), 6, 6),     // 3: in the corner
+		plane.NewAABB(geom.NewVec(506, 506), 6, 6)) // 4: in the far corner
+	for name, c := range map[string]struct {
+		area geom.AABB
+		want []uid.UID64
+	}{
+		"ending on the seam":    {geom.NewAABB(geom.NewVec(500, 100), geom.NewVec(512, 106)), []uid.UID64{1}},
+		"short of the seam":     {geom.NewAABB(geom.NewVec(500, 100), geom.NewVec(511.9, 106)), nil},
+		"beginning on the seam": {geom.NewAABB(geom.NewVec(0, 200), geom.NewVec(20, 206)), []uid.UID64{2}},
+		"off the seam":          {geom.NewAABB(geom.NewVec(0.1, 200), geom.NewVec(20, 206)), nil},
+		"ending in the corner":  {geom.NewAABB(geom.NewVec(500, 500), geom.NewVec(512, 512)), []uid.UID64{3, 4}},
+		"from the corner":       {geom.NewAABB(geom.NewVec(0, 0), geom.NewVec(20, 20)), []uid.UID64{3, 4}},
+		"the whole width":       {geom.NewAABB(geom.NewVec(0, 100), geom.NewVec(512, 106)), []uid.UID64{1}},
+	} {
+		if got := ask(c.area); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v found %v, want %v", name, c.area, got, c.want)
+		}
+	}
+}
