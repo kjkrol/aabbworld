@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.20.0 — 2026-11-09
 
 **SIMD**
 - Built with `GOEXPERIMENT=simd`, the wide code runs on arm64 and wasm too: the pair sweep, the
