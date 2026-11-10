@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.21.2 — 2026-11-10
+
+**Changed**
+- `github.com/kjkrol/uid` v1.3.0: uid's v1.2.0 was tagged by mistake from code older than v0.2.1
+  and stays in the module proxy, so `go get -u` raised uid to a version that is not the newest
+  code (kjkrol/uid#2). v1.3.0 is v0.3.0's code and retracts v1.2.0.
+
 ## v1.21.1 — 2026-11-09
 
 **Docs**
