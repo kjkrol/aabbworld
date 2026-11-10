@@ -3,7 +3,7 @@ module github.com/kjkrol/aabbworld
 go 1.27.1
 
 require (
-	github.com/kjkrol/uid v0.3.0
+	github.com/kjkrol/uid v1.3.0
 	github.com/stretchr/testify v1.11.1
 )
 
